@@ -1,0 +1,782 @@
+---
+title: "Processos INAR (1)"
+author: "Paulo Manoel da Silva Junior"
+format: 
+  html:
+    theme: materia
+    toc: true
+    toc-title: Sumário
+    toc-depth: 4
+    toc-location: right
+    code-copy: true
+    number-sections: false
+    code-tools: false
+    code-block-bg: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-border-left: "#31BAE9"
+    number-depth: 3
+    html-math-method: mathjax
+self-contained: true
+page-layout: full
+editor: source
+---
+
+# Processo INAR (1)
+
+:::{.callout-tip}
+
+## Objetivo 
+
+- Utilizar procesos INAR (1), tendo como base três distribuições diferentes no termo aleatório do erro. E em nosso presente estudo as distribuições são **Poisson, Binomial Negativa e Geométrica.**
+
+- Utilizar o operador `thinning binomial`, que utiliza da distribuição binomial. 
+
+- A forma do processo pode ser vista da seguinte forma: 
+
+$$Y_t = \alpha \hspace{0.2cm} \circ \hspace{0.2cm} Y_{t-1} \hspace{0.2cm} + \hspace{0.2cm} \epsilon_t$$
+
+Em que o operador $\alpha \hspace{0.2cm} \circ = \sum_{i=1}^{Y} N_i$
+
+- Vamos fazer algumas simulações de séries e testar as estimativas dos parâmetros, através de dois métodos: Mínimos quadrados condicionais e Máxima Verossimilhança Condicional. 
+
+- Após a estimativa dos parâmetros vamos simular a série com os parâmetros estimados e comparar com a série verdadeira, e no final vamos utilizar uma série de valores de contagem real (do mundo prático), e submeter aos métodos para observar qual se adequará melhor aos meus dados. 
+
+- `Observação:` Na utilização das distribuições binomial negativa e geométrica utilizaremos ambas parametrizadas pela média, no caso da distribuição binomial negativa, ela será parametrizada por $\mu$ e por $\sigma^2$. 
+
+:::
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+rm(list=ls(all=T))
+gc()
+```
+
+:::{.callout-important}
+
+## Bibliotecas 
+
+- De início utilizarei apenas poucas bibliotecas. 
+
+- `optimx`: Utilizada para maximizar a função de log verossimilhança na estimativa dos parâmetros 
+- `DataExplorer`: Utilizado para fazer a estatística Descritiva da Série Temporal
+- `dygraphs`: Plotar a série temporal 
+- `plotly`: Outra biblioteca para plotar a série temporal 
+- `skimr`: Estatística Descritiva da Série Temporal, seja as simuladas ou conjunto de dados reais 
+
+:::
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(optimx)
+library(DataExplorer)
+library(dygraphs)
+library(plotly)
+library(skimr)
+library(gt)
+library(ggplot2)
+```
+
+- Criaremos aqui em blocos as funções de simular a série temporal, com base nas distribuições, bem como a de estimar usando mínimos quadrados condicionais e máxima verossimilhança condicional. 
+
+:::{.panel-tabset}
+
+## Simular Série
+
+```{r, warning=FALSE, message=FALSE}
+simular_poisson <- function(n, alpha, lambda){
+  x <- numeric(n)
+  x[1] <- rpois(1, lambda)
+  
+  for(t in 2:n){
+    thinnig_binomial <- rbinom(1, x[t-1], alpha)
+    erro <- rpois(1, lambda)
+    x[t] <- thinnig_binomial + erro
+  }
+  return(x)
+}
+
+simular_binomial_negativa <- function(n, alpha, mu, sigma2){
+  x <- numeric(n)
+  r <- mu^2 / (sigma2 - mu)
+  p <- mu / sigma2
+  x[1] <- rnbinom(1, size = r, prob = p)
+  
+  for (t in 2:n) {
+    thinning_binomial <- rbinom(1, x[t-1], alpha)
+    erro <- rnbinom(1, size = r, prob = p)
+    x[t] <- thinning_binomial + erro
+  }
+  return(x)
+}
+
+simular_geometrica <- function(n, alpha, mu){
+  x <- numeric(n)
+  p <- 1 / (1 + mu)
+  x[1] <- rgeom(1, p)
+  
+  for (t in 2:n) {
+    thinning_binomial <- rbinom(1, x[t-1], alpha)
+    erro <- rgeom(1, p)
+    x[t] <- thinning_binomial + erro
+  }
+  return(x)
+}
+```
+
+## Mínimos Quadrados Condicionais
+
+```{r, message=FALSE, warning=FALSE}
+minimos_quadrados <- function(x){
+  n <- length(x)
+  S1 <- sum(x[-1] * x[-n])                                  # Soma de Y_t * Y_{t-1}
+  S2 <- sum(x[-n]^2)                                        # Soma de Y_{t-1}^2
+  S3 <- sum(x[-1])                                          # Soma de Y_t
+  S4 <- sum(x[-n])                                          # Soma de Y_{t-1}
+  
+  # Estimado de alpha 
+  
+  alpha_hat <- (S1 - (S3 * S4) / (n-1)) / (S2 - (S4^2) / (n-1))
+  alpha_hat <- max(0, min(alpha_hat, 1)) # Por definição sabemos que alpha pertence ao intervalo [0,1]
+  
+  lambda_hat <- (S3 - alpha_hat * S4) / (n-1)
+  lambda_hat <- max(0, lambda_hat) # Como valores de contagem são positivos, temos que definir esse intervalo
+  
+  return(c(alpha_estimado = alpha_hat, lambda_estimado = lambda_hat))
+}
+```
+
+## Máxima Verossimilhança Condicional 
+
+```{r, message=FALSE, warning=FALSE}
+logveros_poisson <- function(parametros, x){
+  alpha <- parametros[1]
+  lambda <- parametros[2]
+  n <- length(x)
+  log_lik <- 0
+  
+  for(t in 2:n){
+    probabilidade <- 0
+    for (k in 0:min(x[t], x[t-1])) {
+      probabilidade <- probabilidade + dbinom(k, x[t-1], alpha) * dpois(x[t] - k, lambda)
+    }
+    log_lik <- log_lik + log(probabilidade)
+  }
+  return(-log_lik)
+}
+
+estimar_max_ver_poisson <- function(x){
+  chutes <- c(alpha = 0.4, lambda = mean(x))
+  
+  resultado <- optimx(
+    par = chutes, 
+    fn = logveros_poisson, 
+    x = x, 
+    method = "L-BFGS-B",
+    lower = c(0, 0), 
+    upper = c(1, Inf)
+  )
+  return(c(alpha = resultado$alpha, lambda = resultado$lambda))
+}
+
+logveros_binomial_negativa <- function(parametros, x){
+  alpha <- parametros[1] 
+  mu <- parametros[2]
+  sigma2 <- parametros[3]
+  
+  r <- mu^2 / (sigma2 - mu)
+  p <- mu / sigma2
+  n <- length(x)
+  log_lik <- 0
+  
+  for (t in 2:n) {
+    probabilidade <- 0
+    for (k in 0:min(x[t], x[t-1])) {
+      probabilidade <- probabilidade + dbinom(k, x[t-1], alpha) * dnbinom(x[t] - k , size = r, prob = p)
+    }
+    log_lik <- log_lik + log(probabilidade)
+  }
+  return(-log_lik)
+}
+
+estimar_max_ver_binomial_negativa <- function(x){
+  chutes <- c(alpha = 0.4, mu = mean(x), sigma2 = var(x))
+  
+  resultado <- optimx(
+    par = chutes, 
+    fn = logveros_binomial_negativa, 
+    x = x, 
+    method = "L-BFGS-B", 
+    lower = c(0, 0, 0), 
+    upper = c(1, Inf, Inf)
+  )
+  return(c(alpha = resultado$alpha, mu = resultado$mu, sigma = resultado$sigma2))
+}
+
+logveros_geometrica <- function(parametros, x){
+  alpha <- parametros[1]
+  mu <- parametros[2]
+  n <- length(x)
+  p <- 1 / (1 + mu)
+  log_lik <- 0
+  
+  for(t in 2:n){
+    probabilidade <- 0
+    for (k in 0:min(x[t], x[t-1])) {
+      probabilidade <- probabilidade + dbinom(k, x[t-1], alpha) * dgeom(x[t] - k, p)
+    }
+    log_lik <- log_lik + log(probabilidade)
+  }
+  return(-log_lik)
+}
+
+estimar_max_ver_geometrica <- function(x){
+  chutes <- c(alpha = 0.4, mu = mean(x))
+  
+  resultado <- optimx(
+    par = chutes, 
+    fn = logveros_geometrica, 
+    x = x, 
+    method = "L-BFGS-B", 
+    lower = c(0, 0), 
+    upper = c(1, Inf)
+  )
+  return(c(alpha = resultado$alpha, mu = resultado$mu))
+}
+```
+
+:::
+
+## Simulações 
+
+- Vamos simular as séries de tamanhos variados e com as distribuições variadas, sendo variada também as distribuições que usaremos
+
+`Observação:` Na primeira simulação, vou considerar séries de tamanho 100, com um $\alpha$ = 0.7 e com $\lambda$ = 2, no caso da binomial negativa, que temos $\sigma^2$ = 4. 
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(2025)
+alpha_verdadeiro <- 0.7
+lambda_verdadeiro <- 2
+n <- 100
+serie_poisson_100 <- simular_poisson(n, alpha = alpha_verdadeiro, lambda = lambda_verdadeiro)
+serie_geometrica_100 <- simular_geometrica(n, alpha = alpha_verdadeiro, mu = lambda_verdadeiro)
+serie_binomial_negativa_100 <- simular_binomial_negativa(n, alpha = alpha_verdadeiro, mu = lambda_verdadeiro, sigma2 = 4)
+```
+
+Vamos usar os mesmos parâmetros, vamos apenas aumentar o tamanho da série para 150
+
+```{r, message=FALSE, warning=FALSE}
+serie_poisson_150 <- simular_poisson(n = 150, alpha = alpha_verdadeiro, lambda = lambda_verdadeiro)
+serie_geometrica_150 <- simular_geometrica(n = 150, alpha = alpha_verdadeiro, mu = lambda_verdadeiro)
+serie_binomial_negativa_150 <- simular_binomial_negativa(n = 150, alpha = alpha_verdadeiro, mu = lambda_verdadeiro, sigma2 = 4)
+```
+
+Aumentando para 200
+
+```{r, message=FALSE, warning=FALSE}
+serie_poisson_200 <- simular_poisson(n = 200, alpha = alpha_verdadeiro, lambda = lambda_verdadeiro)
+serie_geometrica_200 <- simular_geometrica(n = 200, alpha = alpha_verdadeiro, mu = lambda_verdadeiro)
+serie_binomial_negativa_200 <- simular_binomial_negativa(n = 200, alpha = alpha_verdadeiro, mu = lambda_verdadeiro, sigma2 = 4)
+```
+
+:::{.callout-note}
+
+## Visualizando as séries 
+
+:::{.panel-tabset}
+
+## Tamanho 100
+
+```{r, message=FALSE, warning=FALSE}
+poisson_100 <- ts(serie_poisson_100)
+binomial_negativa_100 <- ts(serie_binomial_negativa_100)
+geometrica_100 <- ts(serie_geometrica_100)
+
+series_100 <- cbind(poisson_100, binomial_negativa_100, geometrica_100)
+colnames(series_100) <- c("Poisson", "Binomial Negativa", "Geometrica")
+
+dygraph(series_100, main = "Visulização das Séries Temporais de Tamanho 100") %>% 
+  dySeries("Poisson", label = "Poisson", drawPoints = TRUE, pointSize = 3) %>% 
+  dySeries("Binomial Negativa", label = "Binomial Negativa", drawPoints = TRUE, pointSize = 3) %>% 
+  dySeries("Geometrica", label = "Geométrica", drawPoints = TRUE, pointSize = 3 )
+  
+```
+
+## Tamanho 150
+
+```{r, message=FALSE, warning=FALSE}
+poisson_150 <- ts(serie_poisson_150)
+binomial_negativa_150 <- ts(serie_binomial_negativa_150)
+geometrica_150 <- ts(serie_geometrica_150)
+
+series_150 <- cbind(poisson_150, binomial_negativa_150, geometrica_150)
+colnames(series_150) <- c("Poisson", "Binomial Negativa", "Geometrica")
+
+dygraph(series_150, main = "Visualização da Série Temporal de tamanho 150") %>% 
+  dySeries("Poisson", label = "Poisson", drawPoints = TRUE, pointSize = 3) %>% 
+  dySeries("Binomial Negativa", label = "Binomial Negativa", drawPoints = TRUE, pointSize = 3) %>% 
+  dySeries("Geometrica", label = "Geométrica", drawPoints = TRUE, pointSize = 3)
+```
+
+## Tamanho 200
+
+```{r, message=FALSE, warning=FALSE}
+poisson_200 <- ts(serie_poisson_200)
+binomial_negativa_200 <- ts(serie_binomial_negativa_200)
+geometrica_200 <- ts(serie_geometrica_200)
+
+series_200 <- cbind(poisson_200, binomial_negativa_200, geometrica_200)
+colnames(series_200) <- c("Poisson", "Binomial Negativa", "Geometrica")
+
+dygraph(series_200, main = "Visualização da Série Temporal de tamanho 200") %>% 
+  dySeries("Poisson", label = "Poisson", drawPoints = TRUE, pointSize = 3) %>% 
+  dySeries("Binomial Negativa", label = "Binomial Negativa", drawPoints = TRUE, pointSize = 3) %>% 
+  dySeries("Geometrica", label = "Geométrica", drawPoints = TRUE, pointSize = 3)
+```
+
+
+:::
+:::
+
+## Estimando os parâmetros 
+
+Vamos estimar os parâmetros e após isso simular a série usando os parâmetros estimados para observar o desempenhos dos métodos. 
+
+```{r, message=FALSE}
+min_quad_poi_100 <- minimos_quadrados(serie_poisson_100)
+min_quad_bin_negativa_100 <- minimos_quadrados(serie_binomial_negativa_100)
+min_quad_geometrica_100 <- minimos_quadrados(serie_geometrica_100)
+
+
+min_quad_poi_150 <- minimos_quadrados(serie_poisson_150)
+min_quad_bin_negativa_150 <- minimos_quadrados(serie_binomial_negativa_150)
+min_quad_geometrica_150 <- minimos_quadrados(serie_geometrica_150)
+
+min_quad_poi_200 <- minimos_quadrados(serie_poisson_200)
+min_quad_bin_negativa_200 <- minimos_quadrados(serie_binomial_negativa_200)
+min_quad_geometrica_200 <- minimos_quadrados(serie_geometrica_200)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+max_vero_poisson_100 <- estimar_max_ver_poisson(serie_poisson_100)
+max_vero_bin_nega_100 <- estimar_max_ver_binomial_negativa(serie_binomial_negativa_100)
+max_vero_geom_100 <- estimar_max_ver_geometrica(serie_geometrica_100)
+```
+
+```{r, warning=FALSE, message=FALSE}
+max_vero_poisson_150 <- estimar_max_ver_poisson(serie_poisson_150)
+max_vero_bin_nega_150 <- estimar_max_ver_binomial_negativa(serie_binomial_negativa_150)
+max_vero_geom_150 <- estimar_max_ver_geometrica(serie_geometrica_150)
+```
+
+```{r, warning=FALSE, message=FALSE}
+max_vero_poisson_200 <- estimar_max_ver_poisson(serie_poisson_200)
+max_vero_bin_nega_200 <- estimar_max_ver_binomial_negativa(serie_binomial_negativa_200)
+max_vero_geom_200 <- estimar_max_ver_geometrica(serie_geometrica_200)
+```
+
+
+:::
+
+- Simulação de Monte Carlo 
+
+- Fazer a simulação gerando 5.000 séries diferentes
+
+```{r, message=FALSE, warning=FALSE}
+simulacao_monte_carlo <- function(n_simulacoes, n_amostra, alpha_verdadeiro, mu_verdadeiro, sigma_verdadeiro, distribuicao){
+  
+  variavel <- ifelse(distribuicao %in% c("poisson", "geometrica"), 2, 3)
+  resultados_CLS <- matrix(NA, nrow = n_simulacoes, ncol = 2)
+  resultados_CML <- matrix(NA, nrow = n_simulacoes, ncol = variavel)
+  
+  if(distribuicao == "poisson"){
+    for (i in 1:n_simulacoes) {
+      x <- simular_poisson(n = n_amostra, alpha = alpha_verdadeiro, lambda = mu_verdadeiro) 
+    
+      resultados_CLS[i, ] <- minimos_quadrados(x)
+    
+      resultados_CML[i, ] <- estimar_max_ver_poisson(x)
+    }
+  }
+  if(distribuicao == "binomial"){
+    for (i in 1:n_simulacoes) {
+      x <- simular_binomial_negativa(n = n_amostra, alpha = alpha_verdadeiro, mu = mu_verdadeiro, sigma2 = sigma_verdadeiro)
+      resultados_CLS[i, ] <- minimos_quadrados(x)
+      
+      resultados_CML[i, ] <- estimar_max_ver_binomial_negativa(x)
+    }
+  }
+  if(distribuicao == "geometrica"){
+    for (i in 1:n_simulacoes) {
+      
+      x <- simular_geometrica(n = n_amostra, alpha = alpha_verdadeiro, mu = mu_verdadeiro)
+      
+      resultados_CLS[i, ] <- minimos_quadrados(x)
+      resultados_CML[i, ] <- estimar_max_ver_geometrica(x)
+      
+    }
+  }
+  
+  media_CLS <- colMeans(resultados_CLS, na.rm = T)
+  variancia_CLS <- apply(resultados_CLS, 2, var, na.rm = T)
+  
+  media_CML <- colMeans(resultados_CML, na.rm = T)
+  variancia_CML <- apply(resultados_CML, 2, var, na.rm = T)
+  
+  return(list(
+    media_Minimos_Quadrados_condicionais = media_CLS, 
+    variancia_Minimos_Quadrados_condicionais = variancia_CLS, 
+    media_Maxima_verossimilhanca_condicional = media_CML, 
+    variancia_Maxima_verossimilhanca_condicional = variancia_CML,
+    minimos_quadrados_resultado <- resultados_CLS, 
+    maxima_verossimilhanca_resultado <- resultados_CML
+  ))
+}
+```
+
+
+## Simulações 
+
+Aqui, inicialmente a primeira simulação teremos os seguintes valores de $\alpha = 0.6$ e $\lambda = 4$, e distribuição `Poisson`.  
+
+### Amostra de tamanho 50
+
+```{r, message=FALSE, warning=FALSE}
+
+resultados_poisson_50 <- simulacao_monte_carlo(n_simulacoes = 5000, n_amostra = 50, alpha_verdadeiro = 0.6, mu_verdadeiro = 4, distribuicao = "poisson")
+
+```
+
+```{r}
+paste0("Com tamanho de amostra 50 e via mínimos quadrados condicionais, temos o seguinte alpha médio: ", round(resultados_poisson_50$media_Minimos_Quadrados_condicionais[1], 4)," para o lambda Médio: ", round(resultados_poisson_50$media_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 50 e via Máxima Verossimilhança Condicional, temos o seguinte alpha médio: ",   round(resultados_poisson_50$media_Maxima_verossimilhanca_condicional[1], 4)," para o lambda Médio: ", round(resultados_poisson_50$media_Maxima_verossimilhanca_condicional[2], 4))
+
+paste0("Com tamanho de amostra 50 e via Mínimos Quadrados Condicionais, temos a variância do alpha: ", 
+       round(resultados_poisson_50$variancia_Minimos_Quadrados_condicionais[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_50$variancia_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 50 e via Máxima Verossimilhança Condicional, temos a variância do alpha: ", 
+       round(resultados_poisson_50$variancia_Maxima_verossimilhanca_condicional[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_50$variancia_Maxima_verossimilhanca_condicional[2], 4))
+
+```
+```{r}
+banco_poisson_50_min_quad <- as.data.frame(resultados_poisson_50[[5]])
+banco_poisson_50_max_vero <- as.data.frame(resultados_poisson_50[[6]])
+```
+
+
+- Visualizando os resultados de Maneira Gráfica 
+
+- Através de um histograma, podemos analisar quais foram os resultados da estimação dos parâmetros. 
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_50_min_quad_lambda <- ggplot(banco_poisson_50_min_quad) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ fill = "gray", alpha = 0.5) +
+ labs(x = "lambda", y = "Quantidade", title = "Histograma da Estimação de lambda com tamanho de amostra 50", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_50_min_quad_alpha <- ggplot(banco_poisson_50_min_quad) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "Alpha", y = "Quantidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 50", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_50_max_vero_lambda <- ggplot(banco_poisson_50_max_vero) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Quantidade", title = "Histograma da Estimação de lambda com tamanho de amostra 50", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_50_max_vero_alpha <- ggplot(banco_poisson_50_max_vero) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "Alpha", y = "Quantidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 50", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width= 16, fig.height=12}
+gridExtra::grid.arrange(grafico_50_min_quad_alpha, grafico_50_max_vero_alpha, grafico_50_min_quad_lambda, grafico_50_max_vero_lambda, nrow = 2, ncol = 2)
+```
+
+### Amostra de tamanho 100
+
+```{r, message=FALSE, warning=FALSE}
+resultados_poisson_100 <- simulacao_monte_carlo(n_simulacoes = 5000, n_amostra = 100, alpha_verdadeiro = 0.6, mu_verdadeiro = 4, distribuicao = "poisson")
+
+```
+
+```{r}
+paste0("Com tamanho de amostra 100 e via mínimos quadrados condicionais, temos o seguinte alpha médio: ", round(resultados_poisson_100$media_Minimos_Quadrados_condicionais[1], 4)," para o lambda Médio: ", round(resultados_poisson_100$media_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 100 e via Máxima Verossimilhança Condicional, temos o seguinte alpha médio: ",   round(resultados_poisson_100$media_Maxima_verossimilhanca_condicional[1], 4)," para o lambda Médio: ", round(resultados_poisson_100$media_Maxima_verossimilhanca_condicional[2], 4))
+
+paste0("Com tamanho de amostra 100 e via Mínimos Quadrados Condicionais, temos a variância do alpha: ", 
+       round(resultados_poisson_100$variancia_Minimos_Quadrados_condicionais[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_100$variancia_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 100 e via Máxima Verossimilhança Condicional, temos a variância do alpha: ", 
+       round(resultados_poisson_100$variancia_Maxima_verossimilhanca_condicional[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_100$variancia_Maxima_verossimilhanca_condicional[2], 4))
+```
+
+```{r}
+banco_poisson_100_min_quad <- as.data.frame(resultados_poisson_100[[5]])
+banco_poisson_100_max_vero <- as.data.frame(resultados_poisson_100[[6]])
+```
+
+
+- Visualizando os resultados de Maneira Gráfica 
+
+- Através de um histograma, podemos analisar quais foram os resultados da estimação dos parâmetros. 
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_100_min_quad_lambda <- ggplot(banco_poisson_100_min_quad) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Densidade", title = "Histograma da Estimação de lambda com tamanho de amostra 100", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_100_min_quad_alpha <- ggplot(banco_poisson_100_min_quad) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density(
+ alpha = 0.5, fill = "gray") +
+ labs(x = "Alpha", y = "Densidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 100", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_100_max_vero_lambda <- ggplot(banco_poisson_100_max_vero) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Densidade", title = "Histograma da Estimação de lambda com tamanho de amostra 100", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_100_max_vero_alpha <- ggplot(banco_poisson_100_max_vero) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density(
+ alpha = 0.5, fill = "gray") +
+ labs(x = "Alpha", y = "Densidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 100", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width= 16, fig.height=12}
+gridExtra::grid.arrange(grafico_100_min_quad_alpha, grafico_100_max_vero_alpha, grafico_100_min_quad_lambda, grafico_100_max_vero_lambda, nrow = 2, ncol = 2)
+```
+
+### Amostra de tamanho 300
+
+
+```{r, message=FALSE, warning=FALSE}
+resultados_poisson_300 <- simulacao_monte_carlo(n_simulacoes = 5000, n_amostra = 300, alpha_verdadeiro = 0.6, mu_verdadeiro = 4, distribuicao = "poisson")
+
+```
+
+```{r}
+paste0("Com tamanho de amostra 300 e via mínimos quadrados condicionais, temos o seguinte alpha médio: ", round(resultados_poisson_300$media_Minimos_Quadrados_condicionais[1], 4)," para o lambda Médio: ", round(resultados_poisson_300$media_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 300 e via Máxima Verossimilhança Condicional, temos o seguinte alpha médio: ",   round(resultados_poisson_300$media_Maxima_verossimilhanca_condicional[1], 4)," para o lambda Médio: ", round(resultados_poisson_300$media_Maxima_verossimilhanca_condicional[2], 4))
+
+paste0("Com tamanho de amostra 300 e via Mínimos Quadrados Condicionais, temos a variância do alpha: ", 
+       round(resultados_poisson_300$variancia_Minimos_Quadrados_condicionais[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_300$variancia_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 300 e via Máxima Verossimilhança Condicional, temos a variância do alpha: ", 
+       round(resultados_poisson_300$variancia_Maxima_verossimilhanca_condicional[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_300$variancia_Maxima_verossimilhanca_condicional[2], 4))
+```
+
+```{r}
+banco_poisson_300_min_quad <- as.data.frame(resultados_poisson_300[[5]])
+banco_poisson_300_max_vero <- as.data.frame(resultados_poisson_300[[6]])
+```
+
+
+- Visualizando os resultados de Maneira Gráfica 
+
+- Através de um histograma, podemos analisar quais foram os resultados da estimação dos parâmetros. 
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_300_min_quad_lambda <- ggplot(banco_poisson_300_min_quad) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Densidade", title = "Histograma da Estimação de lambda com tamanho de amostra 300", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_300_min_quad_alpha <- ggplot(banco_poisson_300_min_quad) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "Alpha", y = "Densidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 300", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_300_max_vero_lambda <- ggplot(banco_poisson_300_max_vero) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Densidade", title = "Histograma da Estimação de lambda com tamanho de amostra 300", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_300_max_vero_alpha <- ggplot(banco_poisson_300_max_vero) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density(
+ alpha = 0.5, fill = "#112446") +
+ labs(x = "Alpha", y = "Densidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 300", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width= 16, fig.height=12}
+gridExtra::grid.arrange(grafico_300_min_quad_alpha, grafico_300_max_vero_alpha, grafico_300_min_quad_lambda, grafico_300_max_vero_lambda, nrow = 2, ncol = 2)
+```
+
+### Amostra de tamanho 500
+
+```{r, message=FALSE, warning=FALSE}
+resultados_poisson_500 <- simulacao_monte_carlo(n_simulacoes = 5000, n_amostra = 500, alpha_verdadeiro = 0.6, mu_verdadeiro = 4, distribuicao = "poisson")
+
+```
+
+```{r}
+paste0("Com tamanho de amostra 500 e via mínimos quadrados condicionais, temos o seguinte alpha médio: ", round(resultados_poisson_500$media_Minimos_Quadrados_condicionais[1], 4)," para o lambda Médio: ", round(resultados_poisson_500$media_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 500 e via Máxima Verossimilhança Condicional, temos o seguinte alpha médio: ",   round(resultados_poisson_500$media_Maxima_verossimilhanca_condicional[1], 4)," para o lambda Médio: ", round(resultados_poisson_500$media_Maxima_verossimilhanca_condicional[2], 4))
+
+paste0("Com tamanho de amostra 500 e via Mínimos Quadrados Condicionais, temos a variância do alpha: ", 
+       round(resultados_poisson_500$variancia_Minimos_Quadrados_condicionais[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_500$variancia_Minimos_Quadrados_condicionais[2], 4))
+
+paste0("Com tamanho de amostra 500 e via Máxima Verossimilhança Condicional, temos a variância do alpha: ", 
+       round(resultados_poisson_500$variancia_Maxima_verossimilhanca_condicional[1], 4), " e a variância para o lambda: ", 
+       round(resultados_poisson_500$variancia_Maxima_verossimilhanca_condicional[2], 4))
+```
+
+```{r}
+banco_poisson_500_min_quad <- as.data.frame(resultados_poisson_500[[5]])
+banco_poisson_500_max_vero <- as.data.frame(resultados_poisson_500[[6]])
+```
+
+
+- Visualizando os resultados de Maneira Gráfica 
+
+- Através de um histograma, podemos analisar quais foram os resultados da estimação dos parâmetros. 
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_500_min_quad_lambda <- ggplot(banco_poisson_500_min_quad) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Densidade", title = "Histograma da Estimação de lambda com tamanho de amostra 500", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_500_min_quad_alpha <- ggplot(banco_poisson_500_min_quad) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "Alpha", y = "Densidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 500", 
+      subtitle = "Via Mínimos Quadrados Condicionais") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+grafico_500_max_vero_lambda <- ggplot(banco_poisson_500_max_vero) +
+ aes(x = V2) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ alpha = 0.5, fill = "gray") +
+ labs(x = "lambda", y = "Densidade", title = "Histograma da Estimação de lambda com tamanho de amostra 500", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+grafico_500_max_vero_alpha <- ggplot(banco_poisson_500_max_vero) +
+ aes(x = V1) +
+ geom_histogram(aes(y = ..density..), bins = 60L, fill = "#46B47A", color = "black") +
+ geom_density( 
+ adjust = 1L, fill = "gray") +
+ labs(x = "Alpha", y = "Densidade", title = "Histograma da Estimação de Alpha com tamanho de amostra 500", 
+      subtitle = "Via Máxima Verossimilhança Condicional") +
+ theme_classic() +
+ theme(plot.title = element_text(size = 12L, hjust = 0.5))
+```
+
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width= 16, fig.height=12}
+gridExtra::grid.arrange(grafico_500_min_quad_alpha, grafico_500_max_vero_alpha, grafico_500_min_quad_lambda, grafico_500_max_vero_lambda, nrow = 2, ncol = 2)
+```
+
