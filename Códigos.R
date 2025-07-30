@@ -321,8 +321,8 @@ resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 50,
 
 tabela_resultados <- 
   data.frame(
-  Estimador = rep(c("alpha", "mu"), each = 2),
-  Método = rep(c("MQC (CLS)", "MVC (CML)"), times = 2),
+  Estimador = rep(c("alpha", "mu"), times = 2),
+  Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
   Média = c(resultados$media_Minimos_Quadrados_condicionais,
             resultados$media_Maxima_verossimilhanca_condicional),
   Viés = c(resultados$vies_minimos_quadrados_condicionais,
@@ -362,7 +362,7 @@ resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 100
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
     Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
@@ -403,7 +403,7 @@ resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 300
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
     Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
@@ -444,7 +444,7 @@ resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 500
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
     Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
@@ -485,8 +485,8 @@ resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
-    Método = rep(c("MQC (CLS)", "MVC (CML)"), times = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
     Viés = c(resultados$vies_minimos_quadrados_condicionais,
@@ -525,8 +525,8 @@ resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
-    Método = rep(c("MQC (CLS)", "MVC (CML)"), times = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
     Viés = c(resultados$vies_minimos_quadrados_condicionais,
@@ -564,8 +564,8 @@ resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
-    Método = rep(c("MQC (CLS)", "MVC (CML)"), times = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
     Viés = c(resultados$vies_minimos_quadrados_condicionais,
@@ -604,8 +604,8 @@ resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 
 
 tabela_resultados <- 
   data.frame(
-    Estimador = rep(c("alpha", "mu"), each = 2),
-    Método = rep(c("MQC (CLS)", "MVC (CML)"), times = 2),
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
     Média = c(resultados$media_Minimos_Quadrados_condicionais,
               resultados$media_Maxima_verossimilhanca_condicional),
     Viés = c(resultados$vies_minimos_quadrados_condicionais,
