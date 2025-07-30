@@ -220,7 +220,7 @@ simulacao_monte_carlo_bin_negativa <- function(n_simulacoes, n_amostra, alpha_ve
   
   media_CML <- colMeans(resultados_CML, na.rm = T)
   variancia_CML <- apply(resultados_CML, 2, var, na.rm = T)
-  vies_CML <- media_CML - c(alpha_verdadeiro, mu_verdadeiro)
+  vies_CML <- media_CML - c(alpha_verdadeiro, mu_verdadeiro, sigma_verdadeiro)
   eqm_CML <- variancia_CML + vies_CML^2
   
   return(list(
@@ -637,3 +637,161 @@ tabela_gt <- tabela_resultados |>
 
 tabela_gt
 
+################################################################################
+#                    ALPHA 0.1, LAMBDA 5 E SIGMA 6 - BIN NEGATIVA - N = 50     #
+################################################################################
+alpha_verdadeiro <- 0.1; lambda_verdadeiro <- 5; sigma_verdadeiro <- 6
+resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 50, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
+
+tabela_resultados <- 
+  data.frame(
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
+    Média = c(resultados$media_Minimos_Quadrados_condicionais,
+              resultados$media_Maxima_verossimilhanca_condicional[1:2]),
+    Viés = c(resultados$vies_minimos_quadrados_condicionais,
+             resultados$vies_maxima_verossimilhanca_condicional[1:2]),
+    Variância = c(resultados$variancia_Minimos_Quadrados_condicionais,
+                  resultados$variancia_Maxima_verossimilhanca_condicional[1:2]),
+    EQM = c(resultados$eqm_minimos_quadrados_condicionais,
+            resultados$eqm_maxima_verossimilhanca_condicional[1:2]))
+
+
+
+tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²" & tabela_resultados$Método == "MQC (CLS)"), ]
+
+tabela_gt <- tabela_resultados |>
+  gt() |>
+  tab_header(
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 6, 50 Observações",
+    subtitle = "Média, Viés, Variância e EQM dos Estimadores"
+  ) |>
+  fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
+  cols_label(
+    Estimador = "Parâmetro",
+    Método = "Método",
+    Média = "Média",
+    Viés = "Viés",
+    Variância = "Variância",
+    EQM = "EQM"
+  )
+
+tabela_gt
+
+################################################################################
+#                    ALPHA 0.1 E LAMBDA 5 - BIN NEGATIVA - N = 100             #
+################################################################################
+resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 100, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
+
+tabela_resultados <- 
+  data.frame(
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
+    Média = c(resultados$media_Minimos_Quadrados_condicionais,
+              resultados$media_Maxima_verossimilhanca_condicional[1:2]),
+    Viés = c(resultados$vies_minimos_quadrados_condicionais,
+             resultados$vies_maxima_verossimilhanca_condicional[1:2]),
+    Variância = c(resultados$variancia_Minimos_Quadrados_condicionais,
+                  resultados$variancia_Maxima_verossimilhanca_condicional[1:2]),
+    EQM = c(resultados$eqm_minimos_quadrados_condicionais,
+            resultados$eqm_maxima_verossimilhanca_condicional[1:2]))
+
+
+
+tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²" & tabela_resultados$Método == "MQC (CLS)"), ]
+
+tabela_gt <- tabela_resultados |>
+  gt() |>
+  tab_header(
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 6, 100 Observações",
+    subtitle = "Média, Viés, Variância e EQM dos Estimadores"
+  ) |>
+  fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
+  cols_label(
+    Estimador = "Parâmetro",
+    Método = "Método",
+    Média = "Média",
+    Viés = "Viés",
+    Variância = "Variância",
+    EQM = "EQM"
+  )
+
+tabela_gt
+################################################################################
+#                    ALPHA 0.1 E LAMBDA 5 - BIN NEGATIVA - N = 300             #
+################################################################################
+resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 300, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
+
+tabela_resultados <- 
+  data.frame(
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
+    Média = c(resultados$media_Minimos_Quadrados_condicionais,
+              resultados$media_Maxima_verossimilhanca_condicional[1:2]),
+    Viés = c(resultados$vies_minimos_quadrados_condicionais,
+             resultados$vies_maxima_verossimilhanca_condicional[1:2]),
+    Variância = c(resultados$variancia_Minimos_Quadrados_condicionais,
+                  resultados$variancia_Maxima_verossimilhanca_condicional[1:2]),
+    EQM = c(resultados$eqm_minimos_quadrados_condicionais,
+            resultados$eqm_maxima_verossimilhanca_condicional[1:2]))
+
+
+
+tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²" & tabela_resultados$Método == "MQC (CLS)"), ]
+
+tabela_gt <- tabela_resultados |>
+  gt() |>
+  tab_header(
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 6, 300 Observações",
+    subtitle = "Média, Viés, Variância e EQM dos Estimadores"
+  ) |>
+  fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
+  cols_label(
+    Estimador = "Parâmetro",
+    Método = "Método",
+    Média = "Média",
+    Viés = "Viés",
+    Variância = "Variância",
+    EQM = "EQM"
+  )
+
+tabela_gt
+################################################################################
+#                    ALPHA 0.1 E LAMBDA 5 - BIN NEGATIVA - N = 500             #
+################################################################################
+resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 500, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
+
+tabela_resultados <- 
+  data.frame(
+    Estimador = rep(c("alpha", "mu"), times = 2),
+    Método = rep(c("MQC (CLS)", "MVC (CML)"), each = 2),
+    Média = c(resultados$media_Minimos_Quadrados_condicionais,
+              resultados$media_Maxima_verossimilhanca_condicional[1:2]),
+    Viés = c(resultados$vies_minimos_quadrados_condicionais,
+             resultados$vies_maxima_verossimilhanca_condicional[1:2]),
+    Variância = c(resultados$variancia_Minimos_Quadrados_condicionais,
+                  resultados$variancia_Maxima_verossimilhanca_condicional[1:2]),
+    EQM = c(resultados$eqm_minimos_quadrados_condicionais,
+            resultados$eqm_maxima_verossimilhanca_condicional[1:2]))
+
+
+
+tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²" & tabela_resultados$Método == "MQC (CLS)"), ]
+
+tabela_gt <- tabela_resultados |>
+  gt() |>
+  tab_header(
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 6, 500 Observações",
+    subtitle = "Média, Viés, Variância e EQM dos Estimadores"
+  ) |>
+  fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
+  cols_label(
+    Estimador = "Parâmetro",
+    Método = "Método",
+    Média = "Média",
+    Viés = "Viés",
+    Variância = "Variância",
+    EQM = "EQM"
+  )
+
+tabela_gt
