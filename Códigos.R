@@ -308,6 +308,200 @@ simulacao_monte_carlo_geometrica <- function(n_simulacoes, n_amostra, alpha_verd
     maxima_verossimilhanca_resultado <- resultados_CML
   ))
 }
+
+################################################################################
+#                     FUNÇÕES DE PREVISÃO UM PASSO À FRENTE                   #
+################################################################################
+
+# Previsão para modelo Poisson
+previsao_poisson <- function(x_anterior, alpha, lambda){
+  return(alpha * x_anterior + lambda)
+}
+
+# Previsão para modelo Binomial Negativa
+previsao_binomial_negativa <- function(x_anterior, alpha, mu, sigma2){
+  return(alpha * x_anterior + mu)
+}
+
+# Previsão para modelo Geométrica
+previsao_geometrica <- function(x_anterior, alpha, mu){
+  return(alpha * x_anterior + mu)
+}
+
+# Função para calcular métricas de erro
+calcular_metricas_erro <- function(valores_reais, valores_previstos){
+  erro_absoluto <- abs(valores_reais - valores_previstos)
+  erro_quadratico <- (valores_reais - valores_previstos)^2
+  
+  mae <- mean(erro_absoluto, na.rm = TRUE)
+  rmse <- sqrt(mean(erro_quadratico, na.rm = TRUE))
+  
+  return(list(mae = mae, rmse = rmse))
+}
+
+################################################################################
+#           SIMULAÇÃO MONTE CARLO PARA PREVISÃO UM PASSO À FRENTE             #
+################################################################################
+
+# Simulação Monte Carlo para previsão - Modelo Poisson
+simulacao_monte_carlo_previsao_poisson <- function(n_simulacoes, n_treino, n_teste, alpha_verdadeiro, lambda_verdadeiro){
+  mae_CLS <- numeric(n_simulacoes)
+  rmse_CLS <- numeric(n_simulacoes)
+  mae_CML <- numeric(n_simulacoes)
+  rmse_CML <- numeric(n_simulacoes)
+  
+  for (i in 1:n_simulacoes) {
+    # Gerar série temporal completa
+    x_completa <- simular_poisson(n = n_treino + n_teste, alpha = alpha_verdadeiro, lambda = lambda_verdadeiro)
+    
+    # Dividir em treino e teste
+    x_treino <- x_completa[1:n_treino]
+    x_teste <- x_completa[(n_treino + 1):(n_treino + n_teste)]
+    
+    # Estimar parâmetros nos dados de treino
+    parametros_CLS <- minimos_quadrados(x_treino)
+    parametros_CML <- estimar_max_ver_poisson(x_treino)
+    
+    # Fazer previsões um passo à frente
+    previsoes_CLS <- numeric(n_teste)
+    previsoes_CML <- numeric(n_teste)
+    
+    for (t in 1:n_teste) {
+      x_anterior <- ifelse(t == 1, x_treino[n_treino], x_completa[n_treino + t - 1])
+      
+      previsoes_CLS[t] <- previsao_poisson(x_anterior, parametros_CLS[1], parametros_CLS[2])
+      previsoes_CML[t] <- previsao_poisson(x_anterior, parametros_CML[1], parametros_CML[2])
+    }
+    
+    # Calcular métricas de erro
+    metricas_CLS <- calcular_metricas_erro(x_teste, previsoes_CLS)
+    metricas_CML <- calcular_metricas_erro(x_teste, previsoes_CML)
+    
+    mae_CLS[i] <- metricas_CLS$mae
+    rmse_CLS[i] <- metricas_CLS$rmse
+    mae_CML[i] <- metricas_CML$mae
+    rmse_CML[i] <- metricas_CML$rmse
+  }
+  
+  return(list(
+    mae_media_CLS = mean(mae_CLS, na.rm = TRUE),
+    rmse_media_CLS = mean(rmse_CLS, na.rm = TRUE),
+    mae_media_CML = mean(mae_CML, na.rm = TRUE),
+    rmse_media_CML = mean(rmse_CML, na.rm = TRUE),
+    mae_todos_CLS = mae_CLS,
+    rmse_todos_CLS = rmse_CLS,
+    mae_todos_CML = mae_CML,
+    rmse_todos_CML = rmse_CML
+  ))
+}
+
+# Simulação Monte Carlo para previsão - Modelo Binomial Negativa
+simulacao_monte_carlo_previsao_bin_negativa <- function(n_simulacoes, n_treino, n_teste, alpha_verdadeiro, mu_verdadeiro, sigma_verdadeiro){
+  mae_CLS <- numeric(n_simulacoes)
+  rmse_CLS <- numeric(n_simulacoes)
+  mae_CML <- numeric(n_simulacoes)
+  rmse_CML <- numeric(n_simulacoes)
+  
+  for (i in 1:n_simulacoes) {
+    # Gerar série temporal completa
+    x_completa <- simular_binomial_negativa(n = n_treino + n_teste, alpha = alpha_verdadeiro, mu = mu_verdadeiro, sigma2 = sigma_verdadeiro)
+    
+    # Dividir em treino e teste
+    x_treino <- x_completa[1:n_treino]
+    x_teste <- x_completa[(n_treino + 1):(n_treino + n_teste)]
+    
+    # Estimar parâmetros nos dados de treino
+    parametros_CLS <- minimos_quadrados(x_treino)
+    parametros_CML <- estimar_max_ver_binomial_negativa(x_treino)
+    
+    # Fazer previsões um passo à frente
+    previsoes_CLS <- numeric(n_teste)
+    previsoes_CML <- numeric(n_teste)
+    
+    for (t in 1:n_teste) {
+      x_anterior <- ifelse(t == 1, x_treino[n_treino], x_completa[n_treino + t - 1])
+      
+      previsoes_CLS[t] <- previsao_binomial_negativa(x_anterior, parametros_CLS[1], mu_verdadeiro)
+      if (!any(is.na(parametros_CML))) {
+        previsoes_CML[t] <- previsao_binomial_negativa(x_anterior, parametros_CML[1], parametros_CML[2])
+      } else {
+        previsoes_CML[t] <- NA
+      }
+    }
+    
+    # Calcular métricas de erro
+    metricas_CLS <- calcular_metricas_erro(x_teste, previsoes_CLS)
+    metricas_CML <- calcular_metricas_erro(x_teste, previsoes_CML)
+    
+    mae_CLS[i] <- metricas_CLS$mae
+    rmse_CLS[i] <- metricas_CLS$rmse
+    mae_CML[i] <- metricas_CML$mae
+    rmse_CML[i] <- metricas_CML$rmse
+  }
+  
+  return(list(
+    mae_media_CLS = mean(mae_CLS, na.rm = TRUE),
+    rmse_media_CLS = mean(rmse_CLS, na.rm = TRUE),
+    mae_media_CML = mean(mae_CML, na.rm = TRUE),
+    rmse_media_CML = mean(rmse_CML, na.rm = TRUE),
+    mae_todos_CLS = mae_CLS,
+    rmse_todos_CLS = rmse_CLS,
+    mae_todos_CML = mae_CML,
+    rmse_todos_CML = rmse_CML
+  ))
+}
+
+# Simulação Monte Carlo para previsão - Modelo Geométrica
+simulacao_monte_carlo_previsao_geometrica <- function(n_simulacoes, n_treino, n_teste, alpha_verdadeiro, mu_verdadeiro){
+  mae_CLS <- numeric(n_simulacoes)
+  rmse_CLS <- numeric(n_simulacoes)
+  mae_CML <- numeric(n_simulacoes)
+  rmse_CML <- numeric(n_simulacoes)
+  
+  for (i in 1:n_simulacoes) {
+    # Gerar série temporal completa
+    x_completa <- simular_geometrica(n = n_treino + n_teste, alpha = alpha_verdadeiro, mu = mu_verdadeiro)
+    
+    # Dividir em treino e teste
+    x_treino <- x_completa[1:n_treino]
+    x_teste <- x_completa[(n_treino + 1):(n_treino + n_teste)]
+    
+    # Estimar parâmetros nos dados de treino
+    parametros_CLS <- minimos_quadrados(x_treino)
+    parametros_CML <- estimar_max_ver_geometrica(x_treino)
+    
+    # Fazer previsões um passo à frente
+    previsoes_CLS <- numeric(n_teste)
+    previsoes_CML <- numeric(n_teste)
+    
+    for (t in 1:n_teste) {
+      x_anterior <- ifelse(t == 1, x_treino[n_treino], x_completa[n_treino + t - 1])
+      
+      previsoes_CLS[t] <- previsao_geometrica(x_anterior, parametros_CLS[1], mu_verdadeiro)
+      previsoes_CML[t] <- previsao_geometrica(x_anterior, parametros_CML[1], parametros_CML[2])
+    }
+    
+    # Calcular métricas de erro
+    metricas_CLS <- calcular_metricas_erro(x_teste, previsoes_CLS)
+    metricas_CML <- calcular_metricas_erro(x_teste, previsoes_CML)
+    
+    mae_CLS[i] <- metricas_CLS$mae
+    rmse_CLS[i] <- metricas_CLS$rmse
+    mae_CML[i] <- metricas_CML$mae
+    rmse_CML[i] <- metricas_CML$rmse
+  }
+  
+  return(list(
+    mae_media_CLS = mean(mae_CLS, na.rm = TRUE),
+    rmse_media_CLS = mean(rmse_CLS, na.rm = TRUE),
+    mae_media_CML = mean(mae_CML, na.rm = TRUE),
+    rmse_media_CML = mean(rmse_CML, na.rm = TRUE),
+    mae_todos_CLS = mae_CLS,
+    rmse_todos_CLS = rmse_CLS,
+    mae_todos_CML = mae_CML,
+    rmse_todos_CML = rmse_CML
+  ))
+}
 ################################################################################
 #                               SIMULAÇOES                                     #
 ################################################################################
@@ -2232,3 +2426,176 @@ tabela_gt <- tabela_resultados |>
   )
 
 tabela_gt
+
+################################################################################
+#                          SIMULAÇÕES UM PASSO A FRENTE                        #
+################################################################################
+resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
+  n_simulacoes = 5000, 
+  n_treino = 40, 
+  n_teste = 10, 
+  alpha_verdadeiro = 0.1, 
+  lambda_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
+  n_simulacoes = 5000, 
+  n_treino = 80, 
+  n_teste = 20, 
+  alpha_verdadeiro = 0.1, 
+  lambda_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
+  n_simulacoes = 5000, 
+  n_treino = 240, 
+  n_teste = 60, 
+  alpha_verdadeiro = 0.1, 
+  lambda_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
+  n_simulacoes = 5000, 
+  n_treino = 400, 
+  n_teste = 100, 
+  alpha_verdadeiro = 0.1, 
+  lambda_verdadeiro = 5
+)
+
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+################################################################################
+#                             BINOMINAL NEGATIVA                               #
+################################################################################
+
+resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
+  n_simulacoes = 5000, 
+  n_treino = 40, 
+  n_teste = 10, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5, 
+  sigma_verdadeiro = 6
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
+  n_simulacoes = 5000, 
+  n_treino = 80, 
+  n_teste = 20, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5, 
+  sigma_verdadeiro = 6
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
+  n_simulacoes = 5000, 
+  n_treino = 240, 
+  n_teste = 60, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5, 
+  sigma_verdadeiro = 6
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
+  n_simulacoes = 5000, 
+  n_treino = 400, 
+  n_teste = 100, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5, 
+  sigma_verdadeiro = 6
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+################################################################################
+#                             GEOMETRICA                                       #
+################################################################################
+
+resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
+  n_simulacoes = 5000, 
+  n_treino = 40, 
+  n_teste = 10, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
+  n_simulacoes = 5000, 
+  n_treino = 80, 
+  n_teste = 20, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
+  n_simulacoes = 5000, 
+  n_treino = 240, 
+  n_teste = 60, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
+resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
+  n_simulacoes = 5000, 
+  n_treino = 400, 
+  n_teste = 100, 
+  alpha_verdadeiro = 0.1, 
+  mu_verdadeiro = 5
+)
+
+print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
+print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
+print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
+print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+
