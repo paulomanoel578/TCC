@@ -1948,10 +1948,13 @@ tabela_gt <- tabela_resultados |>
 
 tabela_gt
 
+Sys.time()
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - POISSON - N = 50                 #
+#                    ALPHA 0.1 E LAMBDA 5 - POISSON - N = 50                 #
 ################################################################################
-alpha_verdadeiro <- 0.7; lambda_verdadeiro <- 0.3
+tempo_inicial <- paste0(format(Sys.time(), "%d/%m/%Y"), " em ", format(Sys.time(), "%H:%M:%S"))
+
+alpha_verdadeiro <- 0.1; lambda_verdadeiro <- 5
 resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 50, alpha_verdadeiro = alpha_verdadeiro, lambda_verdadeiro = lambda_verdadeiro)
 
 tabela_resultados <- 
@@ -1974,7 +1977,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.7 e lambda 0.3, 50 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.1 e lambda 5, 50 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -1990,7 +1993,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - - POISSON - N = 100              #
+#                    ALPHA 0.1 E LAMBDA 5 - - POISSON - N = 100              #
 ################################################################################
 resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 100, alpha_verdadeiro = alpha_verdadeiro, lambda_verdadeiro = lambda_verdadeiro)
 
@@ -2014,7 +2017,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.7 e lambda 0.3, 100 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.1 e lambda 5, 100 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2030,7 +2033,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - - POISSON - N = 300              #
+#                    ALPHA 0.1 E LAMBDA 5   - - POISSON - N = 300              #
 ################################################################################
 resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 300, alpha_verdadeiro = alpha_verdadeiro, lambda_verdadeiro = lambda_verdadeiro)
 
@@ -2054,7 +2057,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.7 e lambda 0.3, 300 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.1 e lambda 5, 300 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2070,7 +2073,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - POISSON - N = 500                #
+#                    ALPHA 0.1 E LAMBDA 5   - POISSON - N = 500                #
 ################################################################################
 resultados <- simulacao_monte_carlo_poisson(n_simulacoes = 5000, n_amostra = 500, alpha_verdadeiro = alpha_verdadeiro, lambda_verdadeiro = lambda_verdadeiro)
 
@@ -2094,7 +2097,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.7 e lambda 0.3, 500 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Poisson - alpha 0.1 e lambda 5, 500 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2110,7 +2113,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - GEOMETRICA - N = 50              #
+#                    ALPHA 0.1 E LAMBDA 5 - GEOMETRICA - N = 50              #
 ################################################################################
 resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 50, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro)
 
@@ -2134,7 +2137,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Geometrica - alpha 0.3 e lambda 0.7, 50 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Geometrica - alpha 0.1 e lambda 5, 50 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2150,7 +2153,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.3 E LAMBDA 0.7 - GEOMETRICA - N = 100               #
+#                    ALPHA 0.1 E LAMBDA 5   - GEOMETRICA - N = 100             #
 ################################################################################
 resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 100, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro)
 
@@ -2174,7 +2177,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Geometrica - alpha 0.7 e lambda 0.3, 100 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Geometrica - alpha 0.1 e lambda 5, 100 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2189,7 +2192,7 @@ tabela_gt <- tabela_resultados |>
 
 tabela_gt
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - GEOMETRICA - N = 300             #
+#                    ALPHA 0.1 E LAMBDA 5 - GEOMETRICA - N = 300             #
 ################################################################################
 resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 300, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro)
 
@@ -2213,7 +2216,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Geometrica - alpha 0.7 e lambda 0.3, 300 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Geometrica - alpha 0.1 e lambda 5, 300 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2229,7 +2232,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.7 E LAMBDA 0.3 - GEOMETRICA - N = 500             #
+#                    ALPHA 0.1 E LAMBDA 5 - GEOMETRICA - N = 500             #
 ################################################################################
 resultados <- simulacao_monte_carlo_geometrica(n_simulacoes = 5000, n_amostra = 500, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro)
 
@@ -2269,9 +2272,9 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                    ALPHA 0.7, LAMBDA 0.3 E SIGMA 0.5 - BIN NEGATIVA - N = 50 #
+#                    ALPHA 0.1, LAMBDA 5 E SIGMA 7     - BIN NEGATIVA - N = 50 #
 ################################################################################
-alpha_verdadeiro <- 0.7; lambda_verdadeiro <- 0.3; sigma_verdadeiro <- 0.5
+alpha_verdadeiro <- 0.1; lambda_verdadeiro <- 5; sigma_verdadeiro <- 7
 resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 50, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
 
 tabela_resultados <- 
@@ -2294,7 +2297,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.7, lambda 0.3 e sigma 0.5, 50 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 7, 50 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2310,7 +2313,7 @@ tabela_gt <- tabela_resultados |>
 tabela_gt
 
 ################################################################################
-#                ALPHA 0.7, LAMBDA 0.3 E SIGMA 0.5  - BIN NEGATIVA - N = 100   #
+#                ALPHA 0.1, LAMBDA 5 E SIGMA 7      - BIN NEGATIVA - N = 100   #
 ################################################################################
 resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 100, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
 
@@ -2334,7 +2337,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.7, lambda 0.3 e sigma 0.5, 100 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 7, 100 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2349,7 +2352,7 @@ tabela_gt <- tabela_resultados |>
 
 tabela_gt
 ################################################################################
-#                 ALPHA 0.7, LAMBDA 0.3 E SIGMA 0.5  - BIN NEGATIVA - N = 300  #
+#                 ALPHA 0.1, LAMBDA 5 E SIGMA 7  - BIN NEGATIVA - N = 300      #
 ################################################################################
 resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 300, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
 
@@ -2388,7 +2391,7 @@ tabela_gt <- tabela_resultados |>
 
 tabela_gt
 ################################################################################
-#                ALPHA 0.7, LAMBDA 0.3 E SIGMA 0.5   - BIN NEGATIVA - N = 500  #
+#                ALPHA 0.1, LAMBDA 5 E SIGMA 7       - BIN NEGATIVA - N = 500  #
 ################################################################################
 resultados <- simulacao_monte_carlo_bin_negativa(n_simulacoes = 5000, n_amostra = 500, alpha_verdadeiro = alpha_verdadeiro, mu_verdadeiro = lambda_verdadeiro, sigma_verdadeiro = sigma_verdadeiro)
 
@@ -2412,7 +2415,7 @@ tabela_resultados <- tabela_resultados[!(tabela_resultados$Estimador == "sigma²
 tabela_gt <- tabela_resultados |>
   gt() |>
   tab_header(
-    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.7, lambda 0.3 e sigma 0.5, 500 Observações",
+    title = "Resumo dos Resultados das Simulações de Monte Carlo - Binomial Negativa - alpha 0.1, lambda 5 e sigma 7, 500 Observações",
     subtitle = "Média, Viés, Variância e EQM dos Estimadores"
   ) |>
   fmt_number(columns = c(Média, Viés, Variância, EQM), decimals = 4) |>
@@ -2426,6 +2429,8 @@ tabela_gt <- tabela_resultados |>
   )
 
 tabela_gt
+
+tempo_final <- paste0(format(Sys.time(), "%d/%m/%Y"), " em ", format(Sys.time(), "%H:%M:%S"))
 
 ################################################################################
 #                          SIMULAÇÕES UM PASSO A FRENTE                        #
