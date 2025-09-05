@@ -13,6 +13,13 @@ library(plotly)
 library(skimr)
 library(gt)
 library(ggplot2)
+library(tidyverse)
+library(xtable)
+library(moments)
+library(tsibble)
+library(readxl)
+library(openxlsx)
+library(ggrepel)
 ################################################################################
 #                         CRIANDO AS FUNÇÕES                                   #
 ################################################################################
@@ -2915,6 +2922,506 @@ tabela_gt
 
 tempo_final <- paste0(format(Sys.time(), "%d/%m/%Y"), " em ", format(Sys.time(), "%H:%M:%S"))
 
+################################################################################
+#                                 APLICAÇÃO PRÁTICA                            #
+################################################################################
+
+banco <- read_excel(file.choose())
+
+banco <- data.frame(data = seq.Date(from = as.Date("01-01-2025", "%d-%m-%Y"), to = as.Date("31-12-2025", "%d-%m-%Y"), by = "day"), quantidade = sample(1:34, 365, replace = T))
+
+dados <- banco %>%
+  mutate(data = as.Date(Data)) %>%
+  mutate(quantidade = Quantidade) %>% 
+  select(-c(Data, Quantidade)) %>% 
+  arrange(data)
+
+
+
+serie_temporal <- ts(dados$quantidade, 
+                     start = c(year(min(dados$data)), month(min(dados$data)), day(min(dados$data))), 
+                     frequency = 12)
+
+serie_temporal
+################################################################################
+#                            ESTATÍSTICA DESCRITIVA                            #
+################################################################################
+
+estatisticas <- data.frame(
+  Estatística = c("N", "Média", "Mediana", "Desvio Padrão", "Variância", "Mínimo", "Máximo", "Assimetria", "Curtose"), 
+  Valor = c(
+    as.integer(length(serie_temporal)), 
+    round(mean(serie_temporal, na.rm = T),3), 
+    round(median(serie_temporal, na.rm = T),3), 
+    round(sd(serie_temporal, na.rm = T),3), 
+    round(var(serie_temporal, na.rm = T),3), 
+    round(min(serie_temporal, na.rm = T),3), 
+    round(max(serie_temporal, na.rm = T),3), 
+    round(skewness(serie_temporal, na.rm = T),3), 
+    round(kurtosis(serie_temporal, na.rm = T),3)
+  )
+)
+
+print(estatisticas)
+
+tabela_latex <- xtable(estatisticas, 
+                       caption = "Estatísticas Descritivas da Série de Seguros Cancelados por Dia", 
+                       label = "tab:estatisticas_descritivas_seguros_cancelados")
+
+print(tabela_latex, 
+      include.rownames = FALSE)
+
+ponto_maximo <- dados %>%
+  filter(quantidade == max(quantidade)) %>%
+  mutate(rotulo = paste0("Máximo: ", quantidade, "\n", format(data, "%d/%m/%Y")))
+
+grafico_serie <- ggplot(data = dados, aes(x = data, y = quantidade)) +
+  geom_line(color = "darkblue", linewidth = 0.7, alpha = 0.9) +
+  geom_point(data = ponto_maximo, color = "#e74c3c", size = 2.5) +
+  geom_label_repel(
+    data = ponto_maximo,
+    aes(label = rotulo),
+    color = "#e74c3c",
+    size = 3,
+    nudge_y = max(dados$quantidade, na.rm = TRUE) * 0.08,
+    segment.color = "#e74c3c",
+    segment.size = 0.5,
+    box.padding = 0.5,
+    min.segment.length = 0
+  ) +
+  geom_hline(yintercept = mean(dados$quantidade, na.rm = TRUE), 
+             color = "#2c3e50", linetype = "dashed", linewidth = 0.5) +
+  annotate("text", x = min(dados$data), 
+           y = mean(dados$quantidade, na.rm = TRUE) * 1.02, 
+           label = paste0("Média: ", round(mean(dados$quantidade, na.rm = TRUE), 2)), 
+           hjust = 0, vjust = 0, color = "darkred", size = 3) +
+  labs(
+    title = "Série Temporal da População desocupada no Rio de Janeiro",
+    subtitle = "Unidade em Mil", 
+    x = "Data",
+    y = "Quantidade",
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray50"),
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major = element_line(color = "gray90", linewidth = 0.1),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+
+# Exibir gráfico
+print(grafico_serie)
+
+ggsave("serie_temporal_diaria_inar.png", 
+       plot = grafico_serie, 
+       width = 12,  # Largura maior para acomodar mais datas
+       height = 6, 
+       dpi = 300)
+
+################################################################################
+#                             FAZENDO A MODELAGEM                              #
+################################################################################
+
+cat("\n1. ESTIMAÇÃO POR MÍNIMOS QUADRADOS CONDICIONAIS (MQC):\n")
+resultados_mqc <- minimos_quadrados(serie_temporal)
+cat("Alpha estimado (MQC):", round(resultados_mqc[1], 4), "\n")
+cat("Lambda estimado (MQC):", round(resultados_mqc[2], 4), "\n")
+
+cat("\n2. ESTIMAÇÃO POR MÁXIMA VEROSSIMILHANÇA CONDICIONAL (MVC - Poisson):\n")
+resultados_mvc_poisson <- estimar_max_ver_poisson(serie_temporal)
+cat("Alpha estimado (MVC Poisson):", round(resultados_mvc_poisson[1], 4), "\n")
+cat("Lambda estimado (MVC Poisson):", round(resultados_mvc_poisson[2], 4), "\n")
+
+# Estimar usando MVC - Binomial Negativa
+cat("\n3. ESTIMAÇÃO POR MÁXIMA VEROSSIMILHANÇA CONDICIONAL (MVC - Binomial Negativa):\n")
+resultados_mvc_binneg <- estimar_max_ver_binomial_negativa(serie_temporal)
+cat("Alpha estimado (MVC Bin Neg):", round(resultados_mvc_binneg[1], 4), "\n")
+cat("Mu estimado (MVC Bin Neg):", round(resultados_mvc_binneg[2], 4), "\n")
+cat("Sigma2 estimado (MVC Bin Neg):", round(resultados_mvc_binneg[3], 4), "\n")
+
+# Estimar usando MVC - Geométrica
+cat("\n4. ESTIMAÇÃO POR MÁXIMA VEROSSIMILHANÇA CONDICIONAL (MVC - Geométrica):\n")
+resultados_mvc_geo <- estimar_max_ver_geometrica(serie_temporal)
+cat("Alpha estimado (MVC Geo):", round(resultados_mvc_geo[1], 4), "\n")
+cat("Mu estimado (MVC Geo):", round(resultados_mvc_geo[2], 4), "\n")
+
+# Calcular critérios de informação para seleção do melhor modelo
+calcular_aic <- function(log_ver, k) {
+  return(2 * k - 2 * log_ver)
+}
+
+calcular_bic <- function(log_ver, k, n) {
+  return(log(n) * k - 2 * log_ver)
+}
+
+# Calcular log-verossimilhanças
+n <- length(serie_temporal)
+log_ver_poisson <- -logveros_poisson(resultados_mvc_poisson, serie_temporal)
+log_ver_binneg <- -logveros_binomial_negativa(resultados_mvc_binneg, serie_temporal)
+log_ver_geo <- -logveros_geometrica(resultados_mvc_geo, serie_temporal)
+
+# Calcular AIC e BIC
+aic_poisson <- calcular_aic(log_ver_poisson, 2)
+aic_binneg <- calcular_aic(log_ver_binneg, 3)
+aic_geo <- calcular_aic(log_ver_geo, 2)
+
+bic_poisson <- calcular_bic(log_ver_poisson, 2, n)
+bic_binneg <- calcular_bic(log_ver_binneg, 3, n)
+bic_geo <- calcular_bic(log_ver_geo, 2, n)
+
+cat("\n=== CRITÉRIOS DE INFORMAÇÃO PARA SELEÇÃO DE MODELOS ===\n")
+cat("Poisson - AIC:", round(aic_poisson, 2), "BIC:", round(bic_poisson, 2), "\n")
+cat("Binomial Negativa - AIC:", round(aic_binneg, 2), "BIC:", round(bic_binneg, 2), "\n")
+cat("Geométrica - AIC:", round(aic_geo, 2), "BIC:", round(bic_geo, 2), "\n")
+
+# Identificar melhor modelo
+modelos <- c("Poisson", "Binomial Negativa", "Geométrica")
+aics <- c(aic_poisson, aic_binneg, aic_geo)
+bics <- c(bic_poisson, bic_binneg, bic_geo)
+
+melhor_aic <- modelos[which.min(aics)]
+melhor_bic <- modelos[which.min(bics)]
+melhor_modelo <- modelos[which.min(aics)]
+
+cat("Melhor modelo:", melhor_modelo, "\n")
+
+cat("Melhor modelo por AIC:", melhor_aic, "\n")
+cat("Melhor modelo por BIC:", melhor_bic, "\n")
+
+if (melhor_aic == "Poisson") {
+  cat("\n=== PREVISÕES COM MODELO POISSON ===\n")
+  alpha <- resultados_mvc_poisson[1]
+  lambda <- resultados_mvc_poisson[2]
+  previsoes <- previsao_poisson(tail(serie_temporal, 1), alpha, lambda)
+  cat("Previsão 1 passo à frente:", round(previsoes, 0), "\n")
+  
+} else if (melhor_aic == "Binomial Negativa") {
+  cat("\n=== PREVISÕES COM MODELO BINOMIAL NEGATIVA ===\n")
+  alpha <- resultados_mvc_binneg[1]
+  mu <- resultados_mvc_binneg[2]
+  previsoes <- previsao_binomial_negativa(tail(serie_temporal, 1), alpha, mu)
+  cat("Previsão 1 passo à frente:", round(previsoes, 0), "\n")
+  
+} else {
+  cat("\n=== PREVISÕES COM MODELO GEOMÉTRICA ===\n")
+  alpha <- resultados_mvc_geo[1]
+  mu <- resultados_mvc_geo[2]
+  previsoes <- previsao_geometrica(tail(serie_temporal, 1), alpha, mu)
+  cat("Previsão 1 passo à frente:", round(previsoes, 0), "\n")
+}
+
+# 5. PREVISÕES MULTI-STEP
+# =======================
+# Definir horizontes de previsão
+horizontes <- c(1, 3, 6, 12)
+ultimo_valor_treino <- tail(serie_temporal, 1)
+
+# Fazer previsões para cada horizonte
+# Função para previsão h-passos à frente - Poisson
+previsao_poisson_multi <- function(x_inicial, alpha, lambda, h) {
+  previsoes <- numeric(h)
+  x_atual <- x_inicial
+  
+  for (i in 1:h) {
+    previsoes[i] <- round(alpha * x_atual + lambda,0)
+    x_atual <- previsoes[i] # Usar a previsão como input para o próximo passo
+  }
+  
+  return(previsoes)
+}
+
+# Função para previsão h-passos à frente - Binomial Negativa
+previsao_binomial_negativa_multi <- function(x_inicial, alpha, mu, h) {
+  previsoes <- numeric(h)
+  x_atual <- x_inicial
+  
+  for (i in 1:h) {
+    previsoes[i] <- round(alpha * x_atual + mu,0)
+    x_atual <- previsoes[i]
+  }
+  
+  return(previsoes)
+}
+
+# Função para previsão h-passos à frente - Geométrica
+previsao_geometrica_multi <- function(x_inicial, alpha, mu, h) {
+  previsoes <- numeric(h)
+  x_atual <- x_inicial
+  
+  for (i in 1:h) {
+    previsoes[i] <- round(alpha * x_atual + mu,0)
+    x_atual <- previsoes[i]
+  }
+  
+  return(previsoes)
+}
+
+previsoes_multi <- list()
+
+if (melhor_modelo == "Poisson") {
+  alpha <- resultados_mvc_poisson[1]
+  lambda <- resultados_mvc_poisson[2]
+  
+  for (h in horizontes) {
+    previsoes_multi[[paste0("h", h)]] <- previsao_poisson_multi(ultimo_valor_treino, alpha, lambda, h)
+  }
+  
+} else if (melhor_modelo == "Binomial_Negativa") {
+  alpha <- resultados_mvc_binneg[1]
+  mu <- resultados_mvc_binneg[2]
+  
+  for (h in horizontes) {
+    previsoes_multi[[paste0("h", h)]] <- previsao_binomial_negativa_multi(ultimo_valor_treino, alpha, mu, h)
+  }
+  
+} else {
+  alpha <- resultados_mvc_geo[1]
+  mu <- resultados_mvc_geo[2]
+  
+  for (h in horizontes) {
+    previsoes_multi[[paste0("h", h)]] <- previsao_geometrica_multi(ultimo_valor_treino, alpha, mu, h)
+  }
+}
+
+# 6. AVALIAÇÃO DAS PREVISÕES
+#==========================
+#  Calcular métricas de erro para cada horizonte
+calcular_metricas <- function(previsoes, valores_reais) {
+  erros <- valores_reais - previsoes
+  mae <- mean(abs(erros), na.rm = TRUE)
+  rmse <- sqrt(mean(erros^2, na.rm = TRUE))
+  mape <- mean(abs(erros/valores_reais), na.rm = TRUE) * 100
+  
+  return(list(mae = mae, rmse = rmse, mape = mape))
+}
+
+# Avaliar previsões para cada horizonte
+resultados_avaliacao <- data.frame()
+
+for (h in horizontes) {
+  if (h <= length(serie_temporal)) {
+    previsoes_h <- previsoes_multi[[paste0("h", h)]]
+    valores_reais_h <- serie_temporal[1:h]
+    
+    metricas <- calcular_metricas(previsoes_h, valores_reais_h)
+    
+    resultados_avaliacao <- rbind(resultados_avaliacao, data.frame(
+      Horizonte = h,
+      MAE = metricas$mae,
+      RMSE = metricas$rmse,
+      MAPE = metricas$mape
+    ))
+  }
+}
+
+cat("\n=== AVALIAÇÃO DAS PREVISÕES ===\n")
+print(resultados_avaliacao)
+previsao_completa
+# 7. GRÁFICOS DE AJUSTE E PREVISÃO
+#================================
+#  Criar dados para os gráficos
+dados_grafico <- data.frame(
+  tempo = 1:length(serie_temporal),
+  valor = as.numeric(serie_temporal) ,
+  tipo = c(rep("Treino", length(serie_temporal)))
+)
+
+# Primeiro, expandir o dataframe para incluir o espaço das previsões
+ultimo_tempo <- length(serie_temporal)
+max_horizonte <- max(horizontes)
+
+# Criar dataframe com espaço para histórico + previsões
+dados_grafico <- data.frame(
+  tempo = 1:(ultimo_tempo + max_horizonte),
+  valor = c(as.numeric(serie_temporal), rep(NA, max_horizonte)),
+  tipo = c(rep("Histórico", ultimo_tempo), rep("Previsão", max_horizonte))
+)
+
+# Adicionar previsões ao dataframe - CORRIGIDO
+for (h in horizontes) {
+  # Criar vetor completo com NAs e previsões
+  previsao_completa <- rep(NA, nrow(dados_grafico))
+  
+  # Inserir previsões nas posições corretas
+  indices_previsao <- (ultimo_tempo + 1):(ultimo_tempo + h)
+  previsao_completa[indices_previsao] <- previsoes_multi[[paste0("h", h)]]
+  
+  # Adicionar ao dataframe
+  dados_grafico[[paste0("previsao_h", h)]] <- previsao_completa
+}
+
+dados_grafico <- dados_grafico %>% 
+  mutate(tempo = seq.Date(from = min(dados$data), to = max(dados$data) %m+% months(12), by = "month"))
+
+# Gráfico 1: Série completa com previsões
+grafico_completo <- ggplot(dados_grafico, aes(x = tempo, y = valor)) +
+  geom_line(aes(color = tipo), linewidth = 0.8) +
+  geom_line(aes(y = previsao_h12), color = "#e74c3c", linewidth = 0.8) +
+  geom_vline(xintercept = length(serie_temporal), linetype = "dashed", color = "red") +
+  labs(title = paste("Série Temporal com Previsões - Modelo", melhor_modelo),
+       x = "Tempo", y = "Quantidade", color = "Conjunto") +
+  scale_color_manual(values = c("Treino" = "#3498db", "Teste" = "#2ecc71")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grafico_completo
+
+#Gráfico 2: Zoom no período de teste com previsões
+dados_teste <- dados_grafico[(dim(dados_grafico)[1]- 20):dim(dados_grafico)[1], ] # Últimos 20 pontos do treino + teste
+
+data_inicio_teste <- max(dados_teste$tempo[dados_teste$tipo == "Histórico"]) + 1
+
+grafico_teste <- ggplot(dados_teste, aes(x = tempo, y = valor)) +
+  geom_line(aes(color = tipo), linewidth = 0.8) +
+  geom_vline(xintercept = as.numeric(data_inicio_teste), linetype = "dashed", color = "red") +
+  geom_point(aes(y = previsao_h1), color = "#e74c3c", size = 2, alpha = 0.7) +
+  geom_point(aes(y = previsao_h3), color = "#f39c12", size = 2, alpha = 0.7) +
+  geom_point(aes(y = previsao_h6), color = "#9b59b6", size = 2, alpha = 0.7) +
+  geom_point(aes(y = previsao_h12), color = "#1abc9c", size = 2, alpha = 0.7) +
+  labs(title = paste0("Série Temporal com Previsões - Modelo ", melhor_modelo), 
+       x = "Tempo", y = "Valor", color = "Conjunto") +
+  scale_color_manual(values = c("Treino" = "#3498db", "Teste" = "#2ecc71")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = data_inicio_teste + 2, y = max(dados_teste$valor, na.rm = TRUE) * 0.9,
+           label = "", color = "red", size = 3)
+
+grafico_teste
+
+# Gráfico 3: Comparação de erros por horizonte
+grafico_erros <- ggplot(resultados_avaliacao, aes(x = factor(Horizonte))) +
+  geom_col(aes(y = MAE, fill = "MAE"), alpha = 0.7, position = "dodge") +
+  geom_col(aes(y = RMSE, fill = "RMSE"), alpha = 0.7, position = "dodge") +
+  labs(title = "Erros de Previsão por Horizonte",
+       x = "Horizonte de Previsão", y = "Valor do Erro", fill = "Métrica") +
+  scale_fill_manual(values = c("MAE" = "#3498db", "RMSE" = "#e74c3c")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Combinar gráficos
+gridExtra::grid.arrange(grafico_completo, grafico_teste, grafico_erros, ncol = 1)
+
+#Salvar gráficos individuais
+ggsave("serie_completa_previsoes.png", plot = grafico_completo, width = 10, height = 6, dpi = 300)
+ggsave("detalhe_teste_previsoes.png", plot = grafico_teste, width = 10, height = 6, dpi = 300)
+ggsave("erros_por_horizonte.png", plot = grafico_erros, width = 8, height = 6, dpi = 300)
+
+#8. COMPARAÇÃO ENTRE MODELOS
+#===========================
+ # Função para avaliar todos os modelos
+avaliar_todos_modelos <- function() {
+  resultados_comparacao <- data.frame()
+  
+#Avaliar modelo Poisson
+  alpha_poisson <- resultados_mvc_poisson[1]
+  lambda_poisson <- resultados_mvc_poisson[2]
+  
+  for (h in horizontes) {
+    if (h <= length(serie_temporal)) {
+      previsoes <- previsao_poisson_multi(ultimo_valor_treino, alpha_poisson, lambda_poisson, h)
+      metricas <- calcular_metricas(previsoes, serie_temporal[1:h])
+      
+      resultados_comparacao <- rbind(resultados_comparacao, data.frame(
+        Modelo = "Poisson",
+        Horizonte = h,
+        MAE = metricas$mae,
+        RMSE = metricas$rmse,
+        MAPE = metricas$mape
+      ))
+    }
+  }
+  
+#  Avaliar modelo Binomial Negativa
+alpha_binneg <- resultados_mvc_binneg[1]
+mu_binneg <- resultados_mvc_binneg[2]
+  
+  for (h in horizontes) {
+    if (h <= length(serie_temporal)) {
+      previsoes <- previsao_binomial_negativa_multi(ultimo_valor_treino, alpha_binneg, mu_binneg, h)
+      metricas <- calcular_metricas(previsoes, serie_temporal[1:h])
+      
+    
+      resultados_comparacao <- rbind(resultados_comparacao, data.frame(
+        Modelo = "Binomial_Negativa",
+        Horizonte = h,
+        MAE = metricas$mae,
+        RMSE = metricas$rmse,
+        MAPE = metricas$mape
+      ))
+    }
+  }
+  
+#Avaliar modelo Geométrica
+
+alpha_geo <- resultados_mvc_geo[1]
+mu_geo <- resultados_mvc_geo[2]
+  
+  for (h in horizontes) {
+    if (h <= length(serie_temporal)) {
+      previsoes <- previsao_geometrica_multi(ultimo_valor_treino, alpha_geo, mu_geo, h)
+      metricas <- calcular_metricas(previsoes, serie_temporal[1:h])
+      
+      
+      resultados_comparacao <- rbind(resultados_comparacao, data.frame(
+        Modelo = "Geometrica",
+        Horizonte = h,
+        MAE = metricas$mae,
+        RMSE = metricas$rmse,
+        MAPE = metricas$mape
+      ))
+    }
+  }
+  
+  return(resultados_comparacao)
+}
+
+#Executar comparação
+comparacao_modelos <- avaliar_todos_modelos()
+
+cat("\n=== COMPARAÇÃO ENTRE MODELOS ===\n")
+print(comparacao_modelos)
+
+#Gráfico de comparação
+grafico_comparacao <- ggplot(comparacao_modelos, aes(x = factor(Horizonte), y = RMSE, fill = Modelo)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  labs(title = "Comparação de RMSE entre Modelos por Horizonte",
+       x = "Horizonte de Previsão", y = "RMSE", fill = "Modelo") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+print(grafico_comparacao)
+ggsave("comparacao_modelos.png", plot = grafico_comparacao, width = 10, height = 6, dpi = 300)
+
+#9. RELATÓRIO FINAL
+#==================
+#Identificar melhor modelo por horizonte
+melhores_por_horizonte <- comparacao_modelos %>%
+  group_by(Horizonte) %>%
+  filter(RMSE == min(RMSE)) %>%
+  select(Horizonte, Modelo, RMSE)
+
+cat("\n=== MELHORES MODELOS POR HORIZONTE ===\n")
+print(melhores_por_horizonte)
+
+#Gerar tabelas LaTeX
+tabela_comparacao <- xtable(comparacao_modelos,
+                            caption = "Comparação de Desempenho entre Modelos INAR(1)",
+                            digits = 4)
+
+print(tabela_comparacao, file = "comparacao_modelos.tex", include.rownames = FALSE)
+
+tabela_melhores <- xtable(melhores_por_horizonte,
+                          caption = "Melhores Modelos por Horizonte de Previsão",
+                          digits = 4)
+
+print(tabela_melhores, file = "melhores_modelos.tex", include.rownames = FALSE)
+
+serie_temporal
 ################################################################################
 #                          SIMULAÇÕES UM PASSO A FRENTE                        #
 ################################################################################
