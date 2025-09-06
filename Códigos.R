@@ -2928,7 +2928,7 @@ tempo_final <- paste0(format(Sys.time(), "%d/%m/%Y"), " em ", format(Sys.time(),
 
 banco <- read_excel(file.choose())
 
-banco <- data.frame(data = seq.Date(from = as.Date("01-01-2025", "%d-%m-%Y"), to = as.Date("31-12-2025", "%d-%m-%Y"), by = "day"), quantidade = sample(1:34, 365, replace = T))
+#banco <- data.frame(data = seq.Date(from = as.Date("01-01-2025", "%d-%m-%Y"), to = as.Date("31-12-2025", "%d-%m-%Y"), by = "day"), quantidade = sample(1:34, 365, replace = T))
 
 dados <- banco %>%
   mutate(data = as.Date(Data)) %>%
@@ -3115,6 +3115,234 @@ if (melhor_aic == "Poisson") {
   cat("Previsão 1 passo à frente:", round(previsoes, 0), "\n")
 }
 
+# 5. PREVISÕES MULTI-STEP COM VALIDAÇÃO WALK-FORWARD PARA TODOS OS HORIZONTES
+# ===========================================================================
+
+# Definir horizontes de previsão
+horizontes <- c(1, 3, 6, 12)
+
+reestimar_parametros <- function(serie, modelo, h) {
+  serie_treino <- serie[1:(length(serie) - h)]  # Exclui as últimas h observações
+  
+  # Inicializar parametros
+  parametros <- NULL
+  
+  # Estimação baseada no modelo
+  if (modelo == "Poisson") {
+    if (exists("estimar_max_ver_poisson")) {
+      parametros <- estimar_max_ver_poisson(serie_treino)
+    } else {
+      stop("Função estimar_max_ver_poisson não encontrada")
+    }
+  } else if (modelo == "Binomial_Negativa") {
+    if (exists("estimar_max_ver_binomial_negativa")) {
+      parametros <- estimar_max_ver_binomial_negativa(serie_treino)
+    } else {
+      stop("Função estimar_max_ver_binomial_negativa não encontrada")
+    }
+  } else if (modelo == "Geométrica") {
+    if (exists("estimar_max_ver_geometrica")) {
+      parametros <- estimar_max_ver_geometrica(serie_treino)
+    } else {
+      stop("Função estimar_max_ver_geometrica não encontrada")
+    }
+  } else {
+    stop("Modelo não reconhecido: ", modelo)
+  }
+  
+  # Verificar se parametros foi criado
+  if (is.null(parametros)) {
+    stop("Falha na estimação dos parâmetros para o modelo: ", modelo)
+  }
+  
+  return(parametros)
+}
+
+# Funções de previsão (mantidas)
+previsao_poisson_multi <- function(x_inicial, alpha, lambda, h) {
+  previsoes <- numeric(h)
+  x_atual <- x_inicial
+  
+  for (i in 1:h) {
+    previsoes[i] <- round(alpha * x_atual + lambda, 0)
+    x_atual <- previsoes[i]
+  }
+  
+  return(previsoes)
+}
+
+previsao_binomial_negativa_multi <- function(x_inicial, alpha, mu, h) {
+  previsoes <- numeric(h)
+  x_atual <- x_inicial
+  
+  for (i in 1:h) {
+    previsoes[i] <- round(alpha * x_atual + mu, 0)
+    x_atual <- previsoes[i]
+  }
+  
+  return(previsoes)
+}
+
+previsao_geometrica_multi <- function(x_inicial, alpha, mu, h) {
+  previsoes <- numeric(h)
+  x_atual <- x_inicial
+  
+  for (i in 1:h) {
+    previsoes[i] <- round(alpha * x_atual + mu, 0)
+    x_atual <- previsoes[i]
+  }
+  
+  return(previsoes)
+}
+
+# Fazer previsões com validação walk-forward para cada horizonte
+previsoes_multi <- list()
+parametros_reestimados <- list()
+valores_reais <- list()
+residuos <- list()
+
+cat("\n=== VALIDAÇÃO WALK-FORWARD PARA TODOS OS HORIZONTES ===\n")
+
+for (h in horizontes) {
+  cat("\n--- Horizonte:", h, "passo(s) ---\n")
+  
+  if (h <= length(serie_temporal)) {
+    # Reestimar parâmetros excluindo as últimas h observações
+    parametros_reestimados[[paste0("h", h)]] <- reestimar_parametros(serie_temporal, melhor_modelo, h)
+    cat("Parâmetros reestimados:", round(parametros_reestimados[[paste0("h", h)]], 4), "\n")
+    
+    # Obter valor inicial para previsão (último valor do treino reduzido)
+    valor_inicial <- tail(serie_temporal[1:(length(serie_temporal) - h)], 1)
+    cat("Valor inicial para previsão:", valor_inicial, "\n")
+    
+    # Fazer previsão de h passos
+    if (melhor_modelo == "Poisson") {
+      previsoes_multi[[paste0("h", h)]] <- previsao_poisson_multi(valor_inicial, 
+                                                                  parametros_reestimados[[paste0("h", h)]][1], 
+                                                                  parametros_reestimados[[paste0("h", h)]][2], h)
+    } else if (melhor_modelo == "Binomial_Negativa") {
+      previsoes_multi[[paste0("h", h)]] <- previsao_binomial_negativa_multi(valor_inicial, 
+                                                                            parametros_reestimados[[paste0("h", h)]][1], 
+                                                                            parametros_reestimados[[paste0("h", h)]][2], h)
+    } else {
+      previsoes_multi[[paste0("h", h)]] <- previsao_geometrica_multi(valor_inicial, 
+                                                                     parametros_reestimados[[paste0("h", h)]][1], 
+                                                                     parametros_reestimados[[paste0("h", h)]][2], h)
+    }
+    
+    # Obter valores reais correspondentes
+    valores_reais[[paste0("h", h)]] <- tail(serie_temporal, h)
+    
+    # Calcular resíduos
+    residuos[[paste0("h", h)]] <- valores_reais[[paste0("h", h)]] - previsoes_multi[[paste0("h", h)]]
+    
+    cat("Previsão:", previsoes_multi[[paste0("h", h)]], "\n")
+    cat("Valor real:", valores_reais[[paste0("h", h)]], "\n")
+    cat("Resíduos:", residuos[[paste0("h", h)]], "\n")
+  }
+}
+
+# 5.1 ANÁLISE DETALHADA POR HORIZONTE
+# ===================================
+
+cat("\n=== ANÁLISE DETALHADA POR HORIZONTE ===\n")
+
+# Obter as datas correspondentes aos períodos de previsão
+datas_reais <- dados$data  # Supondo que você tenha uma coluna 'data' no seu dataframe original
+
+for (h in horizontes) {
+  if (h <= length(serie_temporal)) {
+    cat("\n--- Análise para horizonte", h, "---\n")
+    
+    # Métricas de erro
+    mae <- mean(abs(residuos[[paste0("h", h)]]), na.rm = TRUE)
+    rmse <- sqrt(mean(residuos[[paste0("h", h)]]^2, na.rm = TRUE))
+    mape <- mean(abs(residuos[[paste0("h", h)]]/valores_reais[[paste0("h", h)]]), na.rm = TRUE) * 100
+    
+    cat("MAE:", round(mae, 4), "\n")
+    cat("RMSE:", round(rmse, 4), "\n")
+    cat("MAPE:", round(mape, 2), "%\n")
+    
+    # Obter as datas correspondentes aos valores reais e previstos
+    datas_previsao <- tail(datas_reais, h)  # Últimas h datas
+    
+    # Gráfico de comparação com DATAS REAIS
+    dados_comparacao <- data.frame(
+      Data = rep(datas_previsao, 2),
+      Tipo = rep(c("Real", "Previsto"), each = h),
+      Valor = c(valores_reais[[paste0("h", h)]], previsoes_multi[[paste0("h", h)]])
+    )
+    
+    
+    # Gráfico de comparação com formatação mensal
+    grafico_comparacao <- ggplot(dados_comparacao, aes(x = Data, y = Valor, color = Tipo, group = Tipo)) +
+      geom_line(linewidth = 1) +
+      geom_point(size = 3) +
+      scale_color_manual(values = c("Real" = "#3498db", "Previsto" = "#e74c3c")) +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
+      labs(title = paste("Comparação: Verdadeiro vs Previsão -", h, "Meses à Frente"),
+           subtitle = paste("Modelo:", melhor_modelo, "| MAE:", round(mae, 2), "| RMSE:", round(rmse, 2)),
+           x = "Período", y = "Quantidade") +
+      theme_classic() +
+      theme(plot.title = element_text(hjust = 0.5, size = 14),
+            plot.subtitle = element_text(hjust = 0.5, size = 10))
+    
+    print(grafico_comparacao)
+    ggsave(paste0("comparacao_real_previsto_h", h, ".png"), plot = grafico_comparacao, 
+           width = 10, height = 6, dpi = 300)
+    
+    # Gráfico de resíduos com DATAS REAIS
+    dados_residuos <- data.frame(
+      Data = datas_previsao,
+      Residuo = residuos[[paste0("h", h)]]
+    )
+    
+    grafico_residuos <- ggplot(dados_residuos, aes(x = Data, y = Residuo)) +
+      geom_col(fill = "#f39c12", alpha = 0.8) +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+      labs(title = paste("Análise de Resíduos - Horizonte", h, "-", melhor_modelo),
+           x = "Data", y = "Resíduo (Verdadeiro - Previsão)") +
+      theme_classic() +
+      theme(plot.title = element_text(hjust = 0.5),
+            axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(grafico_residuos)
+    ggsave(paste0("analise_residuos_h", h, "_datas.png"), plot = grafico_residuos, 
+           width = 10, height = 6, dpi = 300)
+  }
+}
+
+# 6. AVALIAÇÃO DAS PREVISÕES (ATUALIZADA)
+# =======================================
+
+resultados_avaliacao <- data.frame()
+
+for (h in horizontes) {
+  if (h <= length(serie_temporal)) {
+    mae <- mean(abs(residuos[[paste0("h", h)]]), na.rm = TRUE)
+    rmse <- sqrt(mean(residuos[[paste0("h", h)]]^2, na.rm = TRUE))
+    mape <- mean(abs(residuos[[paste0("h", h)]]/valores_reais[[paste0("h", h)]]), na.rm = TRUE) * 100
+    
+    resultados_avaliacao <- rbind(resultados_avaliacao, data.frame(
+      Horizonte = h,
+      MAE = mae,
+      RMSE = rmse,
+      MAPE = mape
+    ))
+  }
+}
+
+cat("\n=== AVALIAÇÃO DAS PREVISÕES COM VALIDAÇÃO WALK-FORWARD ===\n")
+print(resultados_avaliacao)
+
+print(xtable(resultados_avaliacao %>% 
+         select(Horizonte, MAE, RMSE), 
+       caption = "Qualidade do Ajuste de acordo com o horizonte considerado", 
+       label = "tab:qualidade_ajuste_realizado"), include.rownames = F)
+
+# [O resto do seu código continua...]
+
 # 5. PREVISÕES MULTI-STEP
 # =======================
 # Definir horizontes de previsão
@@ -3266,7 +3494,7 @@ grafico_completo <- ggplot(dados_grafico, aes(x = tempo, y = valor)) +
   labs(title = paste("Série Temporal com Previsões - Modelo", melhor_modelo),
        x = "Tempo", y = "Quantidade", color = "Conjunto") +
   scale_color_manual(values = c("Treino" = "#3498db", "Teste" = "#2ecc71")) +
-  theme_minimal() +
+  theme_classic() +
   theme(plot.title = element_text(hjust = 0.5))
 
 grafico_completo
@@ -3422,175 +3650,176 @@ tabela_melhores <- xtable(melhores_por_horizonte,
 print(tabela_melhores, file = "melhores_modelos.tex", include.rownames = FALSE)
 
 serie_temporal
-################################################################################
-#                          SIMULAÇÕES UM PASSO A FRENTE                        #
-################################################################################
-resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
-  n_simulacoes = 5000, 
-  n_treino = 40, 
-  n_teste = 10, 
-  alpha_verdadeiro = 0.1, 
-  lambda_verdadeiro = 5
+
+# 10. PREVISÃO DE 12 PASSOS À FRENTE COM GRÁFICO TEMPORAL
+# ======================================================
+
+cat("\n=== PREVISÃO DE 12 PASSOS À FRENTE ===\n")
+
+# Fazer previsão de 12 passos à frente
+horizonte_final <- 12
+
+if (melhor_modelo == "Poisson") {
+  previsao_12_passos <- previsao_poisson_multi(ultimo_valor_treino, 
+                                               resultados_mvc_poisson[1], 
+                                               resultados_mvc_poisson[2], 
+                                               horizonte_final)
+} else if (melhor_modelo == "Binomial_Negativa") {
+  previsao_12_passos <- previsao_binomial_negativa_multi(ultimo_valor_treino, 
+                                                         resultados_mvc_binneg[1], 
+                                                         resultados_mvc_binneg[2], 
+                                                         horizonte_final)
+} else if (melhor_modelo == "Geométrica") {
+  previsao_12_passos <- previsao_geometrica_multi(ultimo_valor_treino, 
+                                                  resultados_mvc_geo[1], 
+                                                  resultados_mvc_geo[2], 
+                                                  horizonte_final)
+}
+
+cat("Previsão dos próximos 12 passos:\n")
+print(previsao_12_passos)
+
+# 10.1 CRIAR GRÁFICO COM SÉRIE REAL + PREVISÃO
+# ===========================================
+
+# Obter a última data da série real
+ultima_data_real <- max(dados$data)
+cat("Última data real:", format(ultima_data_real, "%d/%m/%Y"), "\n")
+
+# Criar sequência de datas para as previsões (assumindo frequência mensal)
+datas_previsao <- seq.Date(from = ultima_data_real %m+% months(1), 
+                           by = "month", 
+                           length.out = horizonte_final)
+
+# Criar dataframe completo para o gráfico
+dados_completos <- data.frame(
+  Data = c(dados$data, datas_previsao),
+  Valor = c(serie_temporal, previsao_12_passos),
+  Tipo = c(rep("Real", length(serie_temporal)), rep("Previsão", horizonte_final)),
+  stringsAsFactors = FALSE
 )
 
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+# Gráfico da série completa com previsão
+grafico_previsao_12 <- ggplot(dados_completos, aes(x = Data, y = Valor, color = Tipo, group = 1)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = as.numeric(ultima_data_real), 
+             linetype = "dashed", color = "red", linewidth = 0.8) +
+  scale_color_manual(values = c("Real" = "#3498db", "Previsão" = "#e74c3c")) +
+  #scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
+  labs(title = paste("Previsão da Série de População desocupada -", melhor_modelo),
+       subtitle = "Na região Metropolitana do Rio de Janeiro",
+       x = "Data", 
+       y = "Quantidade",
+       color = "Tipo") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 16),
+        plot.subtitle = element_text(hjust = 0.5, size = 12, color = "red"),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        axis.text.y = element_text(size = 10),
+        legend.position = "bottom")
 
-resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
-  n_simulacoes = 5000, 
-  n_treino = 80, 
-  n_teste = 20, 
-  alpha_verdadeiro = 0.1, 
-  lambda_verdadeiro = 5
+# Adicionar annotate com a data de corte
+grafico_previsao_12 <- grafico_previsao_12 +
+  annotate("text", x = ultima_data_real, y = max(dados_completos$Valor, na.rm = TRUE) * 0.95,
+           label = paste("Início previsões:\n", format(ultima_data_real %m+% months(1), "%b/%Y")),
+           color = "red", size = 4, hjust = 1.1)
+
+print(grafico_previsao_12)
+ggsave("previsao_12_passos_completa.png", plot = grafico_previsao_12, 
+       width = 14, height = 8, dpi = 300)
+
+# 10.2 TABELA LATEX COM AS PREVISÕES
+# ==================================
+
+# Criar tabela com as previsões
+tabela_previsoes <- data.frame(
+  Data = format(datas_previsao, "%b/%Y"),
+  Previsão = previsao_12_passos,
+  Modelo = melhor_modelo
 )
 
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+cat("\nTabela de Previsões:\n")
+print(tabela_previsoes)
 
-resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
-  n_simulacoes = 5000, 
-  n_treino = 240, 
-  n_teste = 60, 
-  alpha_verdadeiro = 0.1, 
-  lambda_verdadeiro = 5
+# Gerar tabela LaTeX
+tabela_latex_previsoes <- xtable(tabela_previsoes %>% 
+                                   select(-Modelo),
+                                 caption = paste("Previsão de", horizonte_final, 
+                                                 "passos à frente - Modelo", melhor_modelo),
+                                 label = "tab:previsao_12_passos",
+                                 digits = 0)
+
+# Personalizar a tabela LaTeX
+print(tabela_latex_previsoes, 
+      file = "previsao_12_passos.tex",
+      include.rownames = FALSE,
+      caption.placement = "top",
+      table.placement = "htbp",
+      size = "small")
+
+# 10.3 GRÁFICO ZOOM NA ÁREA DE PREVISÃO
+# =====================================
+
+# Focar apenas na área de transição (últimos dados reais + previsões)
+ultimos_reais <- 6  # Últimos 6 pontos reais para contexto
+dados_transicao <- dados_completos[(nrow(dados_completos) - horizonte_final - ultimos_reais + 1):nrow(dados_completos), ]
+
+grafico_transicao <- ggplot(dados_transicao, aes(x = Data, y = Valor, color = Tipo, group = 1)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = as.numeric(ultima_data_real %m+% months(1)), 
+             linetype = "dashed", color = "red", linewidth = 1) +
+  scale_color_manual(values = c("Real" = "#3498db", "Previsão" = "#e74c3c")) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b%Y") +
+  labs(title = paste("Previsão da Série de População desocupada -", melhor_modelo),
+       subtitle = paste("Na região Metropolitana do Rio de Janeiro"),
+       x = "Data", 
+       y = "Quantidade",
+       color = "Tipo") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+        plot.subtitle = element_text(hjust = 0.5, size = 11),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(grafico_transicao)
+ggsave("detalhe_transicao_previsao.png", plot = grafico_transicao, 
+       width = 12, height = 6, dpi = 300)
+
+# 10.4 ESTATÍSTICAS DESCRITIVAS DAS PREVISÕES
+# ===========================================
+
+cat("\n=== ESTATÍSTICAS DAS PREVISÕES ===\n")
+cat("Média das previsões:", round(mean(previsao_12_passos), 2), "\n")
+cat("Desvio padrão das previsões:", round(sd(previsao_12_passos), 2), "\n")
+cat("Mínimo:", min(previsao_12_passos), "\n")
+cat("Máximo:", max(previsao_12_passos), "\n")
+cat("Intervalo de confiança 95%: [", 
+    round(mean(previsao_12_passos) - 1.96 * sd(previsao_12_passos), 2), ", ",
+    round(mean(previsao_12_passos) + 1.96 * sd(previsao_12_passos), 2), "]\n", sep = "")
+
+# Tabela LaTeX com estatísticas
+estatisticas_previsao <- data.frame(
+  Estatística = c("Média", "Desvio Padrão", "Mínimo", "Máximo", "IC 95% (inferior)", "IC 95% (superior)"),
+  Valor = c(round(mean(previsao_12_passos), 2),
+            round(sd(previsao_12_passos), 2),
+            min(previsao_12_passos),
+            max(previsao_12_passos),
+            round(mean(previsao_12_passos) - 1.96 * sd(previsao_12_passos), 2),
+            round(mean(previsao_12_passos) + 1.96 * sd(previsao_12_passos), 2))
 )
 
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
+tabela_latex_estatisticas <- xtable(estatisticas_previsao,
+                                    caption = paste("Estatísticas Descritivas das Previsões - Modelo", melhor_modelo),
+                                    label = "tab:estatisticas_previsao")
 
-resultado_previsao <- simulacao_monte_carlo_previsao_poisson(
-  n_simulacoes = 5000, 
-  n_treino = 400, 
-  n_teste = 100, 
-  alpha_verdadeiro = 0.1, 
-  lambda_verdadeiro = 5
-)
+print(tabela_latex_estatisticas, 
+      file = "estatisticas_previsao.tex",
+      include.rownames = FALSE,
+      caption.placement = "top")
 
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-################################################################################
-#                             BINOMINAL NEGATIVA                               #
-################################################################################
-
-resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
-  n_simulacoes = 5000, 
-  n_treino = 40, 
-  n_teste = 10, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5, 
-  sigma_verdadeiro = 6
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
-  n_simulacoes = 5000, 
-  n_treino = 80, 
-  n_teste = 20, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5, 
-  sigma_verdadeiro = 6
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
-  n_simulacoes = 5000, 
-  n_treino = 240, 
-  n_teste = 60, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5, 
-  sigma_verdadeiro = 6
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-resultado_previsao <- simulacao_monte_carlo_previsao_bin_negativa(
-  n_simulacoes = 5000, 
-  n_treino = 400, 
-  n_teste = 100, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5, 
-  sigma_verdadeiro = 6
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-################################################################################
-#                             GEOMETRICA                                       #
-################################################################################
-
-resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
-  n_simulacoes = 5000, 
-  n_treino = 40, 
-  n_teste = 10, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
-  n_simulacoes = 5000, 
-  n_treino = 80, 
-  n_teste = 20, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
-  n_simulacoes = 5000, 
-  n_treino = 240, 
-  n_teste = 60, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
-resultado_previsao <- simulacao_monte_carlo_previsao_geometrica(
-  n_simulacoes = 5000, 
-  n_treino = 400, 
-  n_teste = 100, 
-  alpha_verdadeiro = 0.1, 
-  mu_verdadeiro = 5
-)
-
-print(paste("MAE médio CLS:", resultado_previsao$mae_media_CLS))
-print(paste("RMSE médio CLS:", resultado_previsao$rmse_media_CLS))
-print(paste("MAE médio CML:", resultado_previsao$mae_media_CML))
-print(paste("RMSE médio CML:", resultado_previsao$rmse_media_CML))
-
+cat("\n=== ARQUIVOS GERADOS ===\n")
+cat("1. previsao_12_passos_completa.png - Gráfico completo da série com previsão\n")
+cat("2. detalhe_transicao_previsao.png - Zoom na área de transição\n")
+cat("3. previsao_12_passos.tex - Tabela LaTeX com as previsões\n")
+cat("4. estatisticas_previsao.tex - Tabela LaTeX com estatísticas\n")
