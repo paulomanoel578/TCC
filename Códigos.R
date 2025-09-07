@@ -3269,7 +3269,7 @@ for (h in horizontes) {
     # Gráfico de comparação com DATAS REAIS
     dados_comparacao <- data.frame(
       Data = rep(datas_previsao, 2),
-      Tipo = rep(c("Real", "Previsto"), each = h),
+      Tipo = rep(c("Verdadeiro", "Predito"), each = h),
       Valor = c(valores_reais[[paste0("h", h)]], previsoes_multi[[paste0("h", h)]])
     )
     
@@ -3278,9 +3278,9 @@ for (h in horizontes) {
     grafico_comparacao <- ggplot(dados_comparacao, aes(x = Data, y = Valor, color = Tipo, group = Tipo)) +
       geom_line(linewidth = 1) +
       geom_point(size = 3) +
-      scale_color_manual(values = c("Real" = "#3498db", "Previsto" = "#e74c3c")) +
+      scale_color_manual(values = c("Verdadeiro" = "#3498db", "Predito" = "#e74c3c")) +
       scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
-      labs(title = paste("Comparação: Verdadeiro vs Previsão -", h, "Meses à Frente"),
+      labs(title = paste("Comparação: Verdadeiro vs Predito -", h, "Meses à Frente"),
            subtitle = paste("Modelo:", melhor_modelo, "| MAE:", round(mae, 2), "| RMSE:", round(rmse, 2)),
            x = "Período", y = "Quantidade") +
       theme_classic() +
@@ -3302,7 +3302,7 @@ for (h in horizontes) {
       geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
       scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
       labs(title = paste("Análise de Resíduos - Horizonte", h, "-", melhor_modelo),
-           x = "Data", y = "Resíduo (Verdadeiro - Previsão)") +
+           x = "Data", y = "Resíduo (Verdadeiro - Predito)") +
       theme_classic() +
       theme(plot.title = element_text(hjust = 0.5),
             axis.text.x = element_text(angle = 45, hjust = 1))
