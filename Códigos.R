@@ -20,6 +20,8 @@ library(tsibble)
 library(readxl)
 library(openxlsx)
 library(ggrepel)
+library(forecast)
+library(AER)
 ################################################################################
 #                         CRIANDO AS FUNÇÕES                                   #
 ################################################################################
@@ -2948,13 +2950,13 @@ serie_temporal
 ################################################################################
 
 estatisticas <- data.frame(
-  Estatística = c("N", "Média", "Mediana", "Desvio Padrão", "Variância", "Mínimo", "Máximo", "Assimetria", "Curtose"), 
+  Estatística = c("Obersavções", "Média", "Mediana", "Desvio Padrão", "Coeficiente de Variação", "Mínimo", "Máximo", "Assimetria", "Curtose"), 
   Valor = c(
     as.integer(length(serie_temporal)), 
     round(mean(serie_temporal, na.rm = T),3), 
     round(median(serie_temporal, na.rm = T),3), 
     round(sd(serie_temporal, na.rm = T),3), 
-    round(var(serie_temporal, na.rm = T),3), 
+    round((sd(serie_temporal, na.rm = T)/mean(serie_temporal, na.rm = T)) * 100, 4), 
     round(min(serie_temporal, na.rm = T),3), 
     round(max(serie_temporal, na.rm = T),3), 
     round(skewness(serie_temporal, na.rm = T),3), 
@@ -2996,9 +2998,9 @@ grafico_serie <- ggplot(data = dados, aes(x = data, y = quantidade)) +
            label = paste0("Média: ", round(mean(dados$quantidade, na.rm = TRUE), 2)), 
            hjust = 0, vjust = 0, color = "darkred", size = 3) +
   labs(
-    title = "Série Temporal da População desocupada no Rio de Janeiro",
-    subtitle = "Unidade em Mil", 
-    x = "Data",
+    title = "",
+    subtitle = "", 
+    x = "Período",
     y = "Quantidade",
   ) +
   theme_minimal(base_size = 12) +
@@ -3092,6 +3094,58 @@ cat("Melhor modelo:", melhor_modelo, "\n")
 
 cat("Melhor modelo por AIC:", melhor_aic, "\n")
 cat("Melhor modelo por BIC:", melhor_bic, "\n")
+
+if (melhor_modelo == "Poisson") {
+  alpha <- resultados_mvc_poisson[1]
+  lambda <- resultados_mvc_poisson[2]
+  mu_hat <- sapply(2:length(serie_temporal), function(t) round(alpha * serie_temporal[t-1] + lambda), 0)
+  
+} else if (melhor_modelo == "Binomial Negativa") {
+  alpha <- resultados_mvc_binneg[1]
+  mu <- resultados_mvc_binneg[2]
+  mu_hat <- sapply(2:length(serie_temporal), function(t) round(alpha * serie_temporal[t-1] + mu), 0)
+  
+} else {
+  alpha <- resultados_mvc_geo[1]
+  mu <- resultados_mvc_geo[2]
+  mu_hat <- sapply(2:length(serie_temporal), function(t) round(alpha * serie_temporal[t-1] + mu, 0))
+}
+
+# Ajustar tamanho da série (porque previsão condicional começa no t=2)
+y <- serie_temporal[2:length(serie_temporal)]
+
+# Resíduos de Pearson
+residuos_pearson <- (y - mu_hat) / sqrt(mu_hat)
+
+# Converter em dataframe para ggplot
+df_res <- data.frame(
+  tempo = 1:length(residuos_pearson),
+  residuos = residuos_pearson
+)
+
+# 1. Série dos resíduos
+p1 <- ggplot(df_res, aes(x = tempo, y = residuos)) +
+  geom_col(fill = "steelblue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "", x = "Observação", y = "Resíduo") +
+  theme_classic()
+print(p1)
+
+ggsave("residuos_pearson.png", p1, width = 7, height = 4, dpi = 300)
+
+# 2. ACF dos resíduos
+p2 <- ggAcf(residuos_pearson) + 
+  labs(title = "") +
+  theme_classic(base_size = 14)
+
+print(p2)
+
+ggsave("acf_residuos_pearson.png", p2, width = 7, height = 4, dpi = 300)
+
+# 3. Teste de Ljung-Box
+ljung <- Box.test(residuos_pearson, lag = 10, type = "Ljung-Box")
+cat("\n=== TESTE DE RESÍDUOS ===\n")
+print(ljung)
 
 if (melhor_aic == "Poisson") {
   cat("\n=== PREVISÕES COM MODELO POISSON ===\n")
@@ -3280,8 +3334,8 @@ for (h in horizontes) {
       geom_point(size = 3) +
       scale_color_manual(values = c("Verdadeiro" = "#3498db", "Predito" = "#e74c3c")) +
       scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
-      labs(title = paste("Comparação: Verdadeiro vs Predito -", h, "Meses à Frente"),
-           subtitle = paste("Modelo:", melhor_modelo, "| MAE:", round(mae, 2), "| RMSE:", round(rmse, 2)),
+      labs(title = paste(""),
+           subtitle = paste(""),
            x = "Período", y = "Quantidade") +
       theme_classic() +
       theme(plot.title = element_text(hjust = 0.5, size = 14),
@@ -3301,7 +3355,7 @@ for (h in horizontes) {
       geom_col(fill = "#f39c12", alpha = 0.8) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
       scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
-      labs(title = paste("Análise de Resíduos - Horizonte", h, "-", melhor_modelo),
+      labs(title = paste(""),
            x = "Data", y = "Resíduo (Verdadeiro - Predito)") +
       theme_classic() +
       theme(plot.title = element_text(hjust = 0.5),
@@ -3416,6 +3470,11 @@ if (melhor_modelo == "Poisson") {
   }
 }
 
+modelo_poisson_estimado <- glm(serie_temporal ~ 1, family = poisson)
+
+disp_test <- dispersiontest(modelo_poisson_estimado)
+
+print(disp_test)
 # 6. AVALIAÇÃO DAS PREVISÕES
 #==========================
 #  Calcular métricas de erro para cada horizonte
@@ -3658,7 +3717,7 @@ cat("\n=== PREVISÃO DE 12 PASSOS À FRENTE ===\n")
 
 # Fazer previsão de 12 passos à frente
 horizonte_final <- 12
-
+ultimo_valor_treino <- tail(serie_temporal, 1)
 if (melhor_modelo == "Poisson") {
   previsao_12_passos <- previsao_poisson_multi(ultimo_valor_treino, 
                                                resultados_mvc_poisson[1], 
@@ -3707,9 +3766,9 @@ grafico_previsao_12 <- ggplot(dados_completos, aes(x = Data, y = Valor, color = 
              linetype = "dashed", color = "red", linewidth = 0.8) +
   scale_color_manual(values = c("Real" = "#3498db", "Previsão" = "#e74c3c")) +
   #scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
-  labs(title = paste("Previsão da Série de População desocupada -", melhor_modelo),
-       subtitle = "Na região Metropolitana do Rio de Janeiro",
-       x = "Data", 
+  labs(title = paste(""),
+       subtitle = "",
+       x = "Período", 
        y = "Quantidade",
        color = "Tipo") +
   theme_classic() +
@@ -3720,10 +3779,10 @@ grafico_previsao_12 <- ggplot(dados_completos, aes(x = Data, y = Valor, color = 
         legend.position = "bottom")
 
 # Adicionar annotate com a data de corte
-grafico_previsao_12 <- grafico_previsao_12 +
-  annotate("text", x = ultima_data_real, y = max(dados_completos$Valor, na.rm = TRUE) * 0.95,
-           label = paste("Início previsões:\n", format(ultima_data_real %m+% months(1), "%b/%Y")),
-           color = "red", size = 4, hjust = 1.1)
+#grafico_previsao_12 <- grafico_previsao_12 +
+  #annotate("text", x = ultima_data_real, y = max(dados_completos$Valor, na.rm = TRUE) * 0.95,
+   #        label = paste("")),
+    #       color = "red", size = 4, hjust = 1.1)
 
 print(grafico_previsao_12)
 ggsave("previsao_12_passos_completa.png", plot = grafico_previsao_12, 
@@ -3772,9 +3831,9 @@ grafico_transicao <- ggplot(dados_transicao, aes(x = Data, y = Valor, color = Ti
              linetype = "dashed", color = "red", linewidth = 1) +
   scale_color_manual(values = c("Real" = "#3498db", "Previsão" = "#e74c3c")) +
   scale_x_date(date_breaks = "1 month", date_labels = "%b%Y") +
-  labs(title = paste("Previsão da Série de População desocupada -", melhor_modelo),
-       subtitle = paste("Na região Metropolitana do Rio de Janeiro"),
-       x = "Data", 
+  labs(title = paste(""),
+       subtitle = paste(""),
+       x = "Período", 
        y = "Quantidade",
        color = "Tipo") +
   theme_classic() +
