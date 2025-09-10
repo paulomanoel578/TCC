@@ -3882,3 +3882,78 @@ cat("1. previsao_12_passos_completa.png - Gráfico completo da série com previs
 cat("2. detalhe_transicao_previsao.png - Zoom na área de transição\n")
 cat("3. previsao_12_passos.tex - Tabela LaTeX com as previsões\n")
 cat("4. estatisticas_previsao.tex - Tabela LaTeX com estatísticas\n")
+
+################################################################################
+#             ANÁLISE DO EQM DA ÚLTIMA SIMULAÇÃO DE MONTE CARLO                #
+################################################################################
+
+
+# Dados do erro quadrático médio
+eqm <- data.frame(
+  n = c(50, 100, 300, 500),
+  
+  # Poisson MQC
+  Poisson_MQC_alpha = c(0.0019, 0.0011, 0.0005, 0.0003),
+  Poisson_MQC_lambda = c(1.9345, 1.3793, 0.7112, 0.4846),
+  
+  # Poisson MVC
+  Poisson_MVC_alpha = c(0.0005, 0.0002, 0.0001, 0.0000),
+  Poisson_MVC_lambda = c(0.5100, 0.2789, 0.1127, 0.0688),
+  
+  # Binomial Negativa MQC
+  BN_MQC_alpha = c(0.0018, 0.0011, 0.0005, 0.0003),
+  BN_MQC_lambda = c(1.8906, 1.4687, 0.7348, 0.5139),
+  
+  # Binomial Negativa MVC
+  BN_MVC_alpha = c(0.0010, 0.0006, 0.0002, 0.0002),
+  BN_MVC_lambda = c(1.8287, 0.7740, 0.2791, 0.2555),
+  
+  # Geométrica MQC
+  Geo_MQC_alpha = c(0.0066, 0.0027, 0.0008, 0.0004),
+  Geo_MQC_lambda = c(7.7092, 3.8210, 1.2659, 0.7191),
+  
+  # Geométrica MVC
+  Geo_MVC_alpha = c(0.0002, 0.0001, 0.0000, 0.0000),
+  Geo_MVC_lambda = c(0.5542, 0.2771, 0.0968, 0.0573)
+)
+
+# Transformar dados para formato longo
+eqm_long_alpha <- eqm %>%
+  select(n, contains("alpha")) %>%
+  pivot_longer(cols = -n, names_to = "Metodo", values_to = "EQM") %>%
+  mutate(
+    Distribuicao = case_when(
+      grepl("Poisson", Metodo) ~ "Poisson",
+      grepl("BN", Metodo) ~ "Binomial Negativa",
+      grepl("Geo", Metodo) ~ "Geométrica"
+    ),
+    Estimador = ifelse(grepl("MQC", Metodo), "MQC", "MVC")
+  )
+
+eqm_long_lambda <- eqm %>%
+  select(n, contains("lambda")) %>%
+  pivot_longer(cols = -n, names_to = "Metodo", values_to = "EQM") %>%
+  mutate(
+    Distribuicao = case_when(
+      grepl("Poisson", Metodo) ~ "Poisson",
+      grepl("BN", Metodo) ~ "Binomial Negativa",
+      grepl("Geo", Metodo) ~ "Geométrica"
+    ),
+    Estimador = ifelse(grepl("MQC", Metodo), "MQC", "MVC")
+  )
+
+
+grafico_eqm_simulacao <- ggplot(eqm_long_lambda, aes(x = factor(n), y = EQM, fill = Estimador)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ Distribuicao, scales = "free_y") +
+  labs(title = "",
+       subtitle = "",
+       x = "Tamanho da amostra (n)",
+       y = "EQM",
+       fill = "Estimador") +
+  theme_classic() +
+  scale_fill_brewer(palette = "Set2") +
+  theme(legend.position = "bottom")
+
+ggsave("eqm_simulacao.png", plot = grafico_eqm_simulacao, 
+       width = 12, height = 6, dpi = 300)
