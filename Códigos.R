@@ -3140,6 +3140,8 @@ ljung <- Box.test(residuos_pearson, lag = 10, type = "Ljung-Box")
 cat("\n=== TESTE DE RESÍDUOS ===\n")
 print(ljung)
 
+Box.test(serie_temporal, lag = 10, type = "Ljung-Box")
+
 if (melhor_aic == "Poisson") {
   cat("\n=== PREVISÕES COM MODELO POISSON ===\n")
   alpha <- resultados_mvc_poisson[1]
